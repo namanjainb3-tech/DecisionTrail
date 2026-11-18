@@ -1,0 +1,26 @@
+{
+  "id": 4700,
+  "title": "PEP 622: Structural Pattern Matching",
+  "created_at": "2020-06-23T14:00:00Z",
+  "post_stream": {
+    "stream": [1, 2, 3],
+    "posts": [
+      {
+        "id": 1,
+        "post_number": 1,
+        "username": "gvanrossum",
+        "name": "Guido van Rossum",
+        "created_at": "2020-06-23T14:00:00Z",
+        "cooked": "<p>We are proposing pattern matching syntax for Python.</p><p>We rejected using <code>switch</code> keyword because of ambiguity with C-style semantics.</p>"
+      },
+      {
+        "id": 2,
+        "post_number": 2,
+        "username": "brandtbucher",
+        "name": "Brandt Bucher",
+        "created_at": "2020-06-23T15:00:00Z",
+        "cooked": "<p>I agree. A dedicated <code>match</code> block works much better than overloading existing constructs.</p>"
+      }
+    ]
+  }
+}

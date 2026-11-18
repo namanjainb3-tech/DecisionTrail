@@ -1,0 +1,336 @@
+from __future__ import annotations
+
+import json
+import sqlite3
+from pathlib import Path
+from typing import Any
+from core.config import settings
+from core.models import Comment, Decision, Document
+
+
+def get_db(db_path: Path | str | None = None) -> sqlite3.Connection:
+    if db_path is None:
+        db_path = settings.SQLITE_DB_PATH
+    db_path = Path(db_path)
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON;")
+    # Ensure tables exist
+    cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='decisions';")
+    if not cursor.fetchone():
+        _create_tables(conn)
+    return conn
+
+
+def _create_tables(conn: sqlite3.Connection) -> None:
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS documents (
+            thread_id TEXT PRIMARY KEY,
+            platform TEXT NOT NULL,
+            url TEXT NOT NULL,
+            title TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            raw_json TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS comments (
+            comment_id TEXT PRIMARY KEY,
+            thread_id TEXT NOT NULL,
+            author_handle TEXT NOT NULL,
+            author_email TEXT,
+            posted_at TEXT NOT NULL,
+            body TEXT NOT NULL,
+            url TEXT NOT NULL,
+            platform TEXT,
+            FOREIGN KEY (thread_id) REFERENCES documents (thread_id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS chunks (
+            chunk_id TEXT PRIMARY KEY,
+            thread_id TEXT NOT NULL,
+            comment_ids TEXT NOT NULL,
+            text TEXT NOT NULL,
+            cue_matched INTEGER DEFAULT 0,
+            FOREIGN KEY (thread_id) REFERENCES documents (thread_id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS aliases (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            platform TEXT NOT NULL,
+            handle TEXT NOT NULL,
+            email_hash TEXT,
+            canonical_person_id TEXT NOT NULL,
+            UNIQUE(platform, handle)
+        );
+
+        CREATE TABLE IF NOT EXISTS ingest_cursors (
+            source_type TEXT NOT NULL,
+            source_id TEXT NOT NULL,
+            last_updated_at TEXT NOT NULL,
+            PRIMARY KEY (source_type, source_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS decisions (
+            id TEXT PRIMARY KEY,
+            repo_or_forum TEXT NOT NULL,
+            thread_id TEXT NOT NULL,
+            title TEXT NOT NULL,
+            outcome TEXT NOT NULL,
+            rationale TEXT NOT NULL,
+            alternatives TEXT NOT NULL, -- JSON
+            evidence TEXT NOT NULL,     -- JSON
+            confidence REAL NOT NULL,
+            decided_at TEXT,
+            linked_paths TEXT,          -- JSON
+            extractor_model TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS eval_results (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            pep_number INTEGER NOT NULL,
+            ground_truth_count INTEGER NOT NULL,
+            predicted_count INTEGER NOT NULL,
+            matched_count INTEGER NOT NULL,
+            recall REAL NOT NULL,
+            precision REAL NOT NULL,
+            details TEXT,               -- JSON
+            run_at TEXT NOT NULL
+        );
+
+        CREATE VIRTUAL TABLE IF NOT EXISTS comments_fts USING fts5(
+            comment_id UNINDEXED,
+            body,
+            tokenize = 'porter unicode61'
+        );
+        """
+    )
+
+
+def init_db(db_path: Path | str | None = None) -> None:
+    conn = get_db(db_path)
+    conn.close()
+
+
+def upsert_document(doc: Document, db_path: Path | str | None = None) -> None:
+    conn = get_db(db_path)
+    with conn:
+        conn.execute(
+            """
+            INSERT INTO documents (thread_id, platform, url, title, created_at, raw_json)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(thread_id) DO UPDATE SET
+                url = excluded.url,
+                title = excluded.title,
+                created_at = excluded.created_at;
+            """,
+            (
+                doc.thread_id,
+                doc.platform,
+                doc.url,
+                doc.title,
+                doc.created_at.isoformat(),
+                doc.model_dump_json(),
+            ),
+        )
+        for comment in doc.comments:
+            conn.execute(
+                """
+                INSERT INTO comments (comment_id, thread_id, author_handle, author_email, posted_at, body, url, platform)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(comment_id) DO UPDATE SET
+                    author_handle = excluded.author_handle,
+                    author_email = excluded.author_email,
+                    posted_at = excluded.posted_at,
+                    body = excluded.body,
+                    url = excluded.url;
+                """,
+                (
+                    comment.comment_id,
+                    doc.thread_id,
+                    comment.author_handle,
+                    comment.author_email,
+                    comment.posted_at.isoformat(),
+                    comment.body,
+                    comment.url,
+                    doc.platform,
+                ),
+            )
+            # Maintain FTS index
+            conn.execute("DELETE FROM comments_fts WHERE comment_id = ?", (comment.comment_id,))
+            conn.execute(
+                "INSERT INTO comments_fts (comment_id, body) VALUES (?, ?)",
+                (comment.comment_id, comment.body),
+            )
+    conn.close()
+
+
+def save_decision(decision: Decision, db_path: Path | str | None = None) -> None:
+    conn = get_db(db_path)
+    with conn:
+        conn.execute(
+            """
+            INSERT INTO decisions (
+                id, repo_or_forum, thread_id, title, outcome, rationale,
+                alternatives, evidence, confidence, decided_at, linked_paths, extractor_model
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                title = excluded.title,
+                outcome = excluded.outcome,
+                rationale = excluded.rationale,
+                alternatives = excluded.alternatives,
+                evidence = excluded.evidence,
+                confidence = excluded.confidence,
+                decided_at = excluded.decided_at,
+                linked_paths = excluded.linked_paths,
+                extractor_model = excluded.extractor_model;
+            """,
+            (
+                decision.id,
+                decision.repo_or_forum,
+                decision.thread_id,
+                decision.title,
+                decision.outcome,
+                decision.rationale,
+                json.dumps([a.model_dump(mode="json") for a in decision.alternatives]),
+                json.dumps([e.model_dump(mode="json") for e in decision.evidence]),
+                decision.confidence,
+                decision.decided_at.isoformat() if decision.decided_at else None,
+                json.dumps(decision.linked_paths),
+                decision.extractor_model,
+            ),
+        )
+    conn.close()
+
+
+def get_decisions(
+    q: str | None = None,
+    path: str | None = None,
+    outcome: str | None = None,
+    limit: int = 50,
+    db_path: Path | str | None = None,
+) -> list[dict[str, Any]]:
+    conn = get_db(db_path)
+    clauses = []
+    params: list[Any] = []
+
+    if outcome:
+        clauses.append("outcome = ?")
+        params.append(outcome)
+
+    if q:
+        clauses.append("(title LIKE ? OR rationale LIKE ?)")
+        params.extend([f"%{q}%", f"%{q}%"])
+
+    if path:
+        clauses.append("linked_paths LIKE ?")
+        params.append(f"%{path}%")
+
+    where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    sql = f"SELECT * FROM decisions {where_sql} LIMIT ?"
+    params.append(limit)
+
+    cursor = conn.execute(sql, params)
+    rows = cursor.fetchall()
+    conn.close()
+
+    result = []
+    for row in rows:
+        d = dict(row)
+        d["alternatives"] = json.loads(d["alternatives"])
+        d["evidence"] = json.loads(d["evidence"])
+        d["linked_paths"] = json.loads(d["linked_paths"]) if d["linked_paths"] else []
+        result.append(d)
+    return result
+
+
+def get_cursor(source_type: str, source_id: str, db_path: Path | str | None = None) -> str | None:
+    conn = get_db(db_path)
+    cursor = conn.execute(
+        "SELECT last_updated_at FROM ingest_cursors WHERE source_type = ? AND source_id = ?",
+        (source_type, source_id),
+    )
+    row = cursor.fetchone()
+    conn.close()
+    return row["last_updated_at"] if row else None
+
+
+def upsert_cursor(
+    source_type: str, source_id: str, last_updated_at: str, db_path: Path | str | None = None
+) -> None:
+    conn = get_db(db_path)
+    with conn:
+        conn.execute(
+            """
+            INSERT INTO ingest_cursors (source_type, source_id, last_updated_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(source_type, source_id) DO UPDATE SET
+                last_updated_at = excluded.last_updated_at;
+            """,
+            (source_type, source_id, last_updated_at),
+        )
+    conn.close()
+
+
+def search_comments_bm25(
+    query: str, limit: int = 10, db_path: Path | str | None = None
+) -> list[dict[str, Any]]:
+    conn = get_db(db_path)
+    # Sanitize query for FTS5
+    safe_query = '"' + query.replace('"', '""') + '"'
+    sql = """
+        SELECT c.*, bm25(comments_fts) as rank
+        FROM comments_fts
+        JOIN comments c ON comments_fts.comment_id = c.comment_id
+        WHERE comments_fts MATCH ?
+        ORDER BY rank
+        LIMIT ?;
+    """
+    try:
+        cursor = conn.execute(sql, (safe_query, limit))
+        rows = cursor.fetchall()
+        return [dict(r) for r in rows]
+    except Exception:
+        # Fallback to simple LIKE if FTS expression has syntax issue
+        fallback_sql = """
+            SELECT *, 0.0 as rank
+            FROM comments
+            WHERE body LIKE ?
+            LIMIT ?;
+        """
+        cursor = conn.execute(fallback_sql, (f"%{query}%", limit))
+        rows = cursor.fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def get_documents(
+    thread_ids: list[str] | None = None,
+    limit: int = 100,
+    db_path: Path | str | None = None,
+) -> list[Document]:
+    conn = get_db(db_path)
+    if thread_ids:
+        placeholders = ",".join("?" for _ in thread_ids)
+        sql = f"SELECT raw_json FROM documents WHERE thread_id IN ({placeholders}) LIMIT ?"
+        params = list(thread_ids) + [limit]
+    else:
+        sql = "SELECT raw_json FROM documents LIMIT ?"
+        params = [limit]
+
+    cursor = conn.execute(sql, params)
+    rows = cursor.fetchall()
+    conn.close()
+
+    documents: list[Document] = []
+    for r in rows:
+        try:
+            documents.append(Document.model_validate_json(r["raw_json"]))
+        except Exception:
+            continue
+    return documents
+
+

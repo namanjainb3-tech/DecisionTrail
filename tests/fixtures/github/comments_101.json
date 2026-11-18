@@ -1,0 +1,20 @@
+[
+  {
+    "id": 8801,
+    "user": {
+      "login": "gvanrossum"
+    },
+    "body": "We decided to adopt pathlib because it makes cross-platform path handling much cleaner.",
+    "created_at": "2021-05-11T09:00:00Z",
+    "html_url": "https://github.com/psf/black/issues/101#issuecomment-8801"
+  },
+  {
+    "id": 8802,
+    "user": {
+      "login": "dependabot[bot]"
+    },
+    "body": "Bumps dependencies.",
+    "created_at": "2021-05-11T10:00:00Z",
+    "html_url": "https://github.com/psf/black/issues/101#issuecomment-8802"
+  }
+]

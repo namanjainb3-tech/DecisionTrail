@@ -1,0 +1,30 @@
+[
+  {
+    "number": 101,
+    "title": "Use pathlib instead of os.path for path manipulation",
+    "html_url": "https://github.com/psf/black/issues/101",
+    "created_at": "2021-05-10T10:00:00Z",
+    "updated_at": "2021-05-12T15:30:00Z",
+    "body": "We should migrate our path routines to pathlib.Path. What do people think?",
+    "user": {
+      "login": "ambv"
+    },
+    "comments_url": "https://api.github.com/repos/psf/black/issues/101/comments"
+  },
+  {
+    "number": 102,
+    "title": "Fix Windows UNC path formatting",
+    "html_url": "https://github.com/psf/black/pull/102",
+    "created_at": "2021-06-01T12:00:00Z",
+    "updated_at": "2021-06-02T18:00:00Z",
+    "body": "This PR fixes Windows path handling.",
+    "user": {
+      "login": "ichard26"
+    },
+    "pull_request": {
+      "url": "https://api.github.com/repos/psf/black/pulls/102",
+      "html_url": "https://github.com/psf/black/pull/102"
+    },
+    "comments_url": "https://api.github.com/repos/psf/black/issues/102/comments"
+  }
+]

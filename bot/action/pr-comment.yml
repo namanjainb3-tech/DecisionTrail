@@ -1,0 +1,40 @@
+name: DecisionTrail PR Bot
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  analyze_and_comment:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      contents: read
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Run DecisionTrail PR Analysis
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ALLOWED_POST_REPOS: ${{ secrets.ALLOWED_POST_REPOS }}
+          TARGET_REPO: ${{ github.repository }}
+        run: |
+          python -c "
+          import os, json
+          from bot.analyze import analyze_pr, check_repo_allowlist
+          
+          repo = os.environ['TARGET_REPO']
+          check_repo_allowlist(repo)
+          print(f'Running DecisionTrail on authorized test fork: {repo}')
+          "

@@ -1,0 +1,148 @@
+[
+  {
+    "id": "dec_pathlib_001",
+    "repo_or_forum": "psf/black",
+    "thread_id": "thread_101",
+    "title": "Use pathlib instead of os.path",
+    "outcome": "adopted",
+    "rationale": "pathlib provides a clean object-oriented interface and resolves Windows slash quirks automatically.",
+    "alternatives": [
+      {
+        "text": "Keep os.path with custom normalize function",
+        "reason": "Too error-prone across different Windows drives and UNC paths.",
+        "evidence": {
+          "source_url": "https://github.com/psf/black/issues/101#1",
+          "platform": "github_issue",
+          "author_handle": "ambv",
+          "posted_at": "2021-05-10T12:00:00Z",
+          "quote": "Custom normalize wrapper broke on UNC paths"
+        }
+      }
+    ],
+    "evidence": [
+      {
+        "source_url": "https://github.com/psf/black/issues/101#2",
+        "platform": "github_issue",
+        "author_handle": "gvanrossum",
+        "posted_at": "2021-05-11T09:00:00Z",
+        "quote": "We decided to adopt pathlib because it makes cross-platform path handling much cleaner."
+      }
+    ],
+    "confidence": 0.98,
+    "decided_at": "2021-05-11T09:00:00Z",
+    "linked_paths": ["src/black/files.py"],
+    "extractor_model": "gpt-oss-20b"
+  },
+  {
+    "id": "dec_py2_drop_002",
+    "repo_or_forum": "psf/black",
+    "thread_id": "thread_100",
+    "title": "Drop Python 2 runtime support",
+    "outcome": "adopted",
+    "rationale": "Python 2 is end of life and maintaining dual syntax grammars creates unsustainable complexity.",
+    "alternatives": [],
+    "evidence": [
+      {
+        "source_url": "https://github.com/psf/black/issues/100#1",
+        "platform": "github_issue",
+        "author_handle": "ambv",
+        "posted_at": "2020-01-01T12:00:00Z",
+        "quote": "We decided against supporting Python 2.7 in Black formatting."
+      }
+    ],
+    "confidence": 1.0,
+    "decided_at": "2020-01-01T12:00:00Z",
+    "linked_paths": ["src/black/__init__.py"],
+    "extractor_model": "gpt-oss-20b"
+  },
+  {
+    "id": "dec_pattern_match_003",
+    "repo_or_forum": "cpython",
+    "thread_id": "discourse_4700",
+    "title": "PEP 622 Structural Pattern Matching Syntax",
+    "outcome": "adopted",
+    "rationale": "Dedicated match/case statements provide explicit destructuring without grammar ambiguities.",
+    "alternatives": [
+      {
+        "text": "Overload existing switch statements",
+        "reason": "C-style switch has completely different fall-through semantics and creates user confusion.",
+        "evidence": {
+          "source_url": "https://discuss.python.org/t/4700/1",
+          "platform": "discourse",
+          "author_handle": "gvanrossum",
+          "posted_at": "2020-06-23T14:00:00Z",
+          "quote": "We rejected using switch keyword because of ambiguity with C-style semantics."
+        }
+      }
+    ],
+    "evidence": [
+      {
+        "source_url": "https://discuss.python.org/t/4700/2",
+        "platform": "discourse",
+        "author_handle": "brandtbucher",
+        "posted_at": "2020-06-23T15:00:00Z",
+        "quote": "A dedicated match block works much better than overloading existing constructs."
+      }
+    ],
+    "confidence": 0.95,
+    "decided_at": "2020-06-23T15:00:00Z",
+    "linked_paths": ["Python/compile.c", "Parser/parser.c"],
+    "extractor_model": "gpt-oss-20b"
+  },
+  {
+    "id": "dec_line_length_004",
+    "repo_or_forum": "psf/black",
+    "thread_id": "thread_245",
+    "title": "Default line length 88 characters",
+    "outcome": "adopted",
+    "rationale": "88 characters represents a pragmatic compromise between 79 chars PEP 8 and wider 100+ character screens.",
+    "alternatives": [
+      {
+        "text": "Stick to strict 79 characters",
+        "reason": "Causes excessive vertical splitting for modern descriptive identifier names.",
+        "evidence": {
+          "source_url": "https://github.com/psf/black/issues/245#2",
+          "platform": "github_issue",
+          "author_handle": "ambv",
+          "posted_at": "2018-05-15T10:00:00Z",
+          "quote": "79 chars causes too many awkward multi-line splits"
+        }
+      }
+    ],
+    "evidence": [
+      {
+        "source_url": "https://github.com/psf/black/issues/245#5",
+        "platform": "github_issue",
+        "author_handle": "ambv",
+        "posted_at": "2018-05-15T12:00:00Z",
+        "quote": "88 characters is about 10% more than 79 and fits well on side-by-side editor splits."
+      }
+    ],
+    "confidence": 0.99,
+    "decided_at": "2018-05-15T12:00:00Z",
+    "linked_paths": ["src/black/const.py"],
+    "extractor_model": "gpt-oss-20b"
+  },
+  {
+    "id": "dec_revert_unc_005",
+    "repo_or_forum": "psf/black",
+    "thread_id": "thread_512",
+    "title": "Revert custom regex path normalization",
+    "outcome": "reverted",
+    "rationale": "Reverted the regex path approach because it broke Windows UNC root path detection.",
+    "alternatives": [],
+    "evidence": [
+      {
+        "source_url": "https://github.com/psf/black/pull/512#1",
+        "platform": "github_pr",
+        "author_handle": "ichard26",
+        "posted_at": "2022-03-01T14:00:00Z",
+        "quote": "Reverting this approach: reason: it broke Windows path handling."
+      }
+    ],
+    "confidence": 1.0,
+    "decided_at": "2022-03-01T14:00:00Z",
+    "linked_paths": ["src/black/files.py"],
+    "extractor_model": "gpt-oss-20b"
+  }
+]
