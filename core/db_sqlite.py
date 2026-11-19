@@ -209,6 +209,7 @@ def get_decisions(
     q: str | None = None,
     path: str | None = None,
     outcome: str | None = None,
+    repo: str | None = None,
     limit: int = 50,
     db_path: Path | str | None = None,
 ) -> list[dict[str, Any]]:
@@ -220,6 +221,10 @@ def get_decisions(
         clauses.append("outcome = ?")
         params.append(outcome)
 
+    if repo and repo.lower() != "all":
+        clauses.append("(repo_or_forum = ? OR repo_or_forum LIKE ?)")
+        params.extend([repo, f"%{repo}%"])
+
     if q:
         clauses.append("(title LIKE ? OR rationale LIKE ?)")
         params.extend([f"%{q}%", f"%{q}%"])
@@ -229,7 +234,7 @@ def get_decisions(
         params.append(f"%{path}%")
 
     where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
-    sql = f"SELECT * FROM decisions {where_sql} LIMIT ?"
+    sql = f"SELECT * FROM decisions {where_sql} ORDER BY rowid DESC LIMIT ?"
     params.append(limit)
 
     cursor = conn.execute(sql, params)
@@ -243,6 +248,17 @@ def get_decisions(
         d["evidence"] = json.loads(d["evidence"])
         d["linked_paths"] = json.loads(d["linked_paths"]) if d["linked_paths"] else []
         result.append(d)
+    return result
+
+
+def get_repositories(db_path: Path | str | None = None) -> list[str]:
+    conn = get_db(db_path)
+    cursor = conn.execute(
+        "SELECT DISTINCT repo_or_forum FROM decisions WHERE repo_or_forum IS NOT NULL AND repo_or_forum != '' ORDER BY repo_or_forum;"
+    )
+    rows = cursor.fetchall()
+    conn.close()
+    return [r[0] for r in rows if r[0]]
     return result
 
 

@@ -2,15 +2,20 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { fetchGraphStatus } from '../lib/api';
+import { useRepo } from '../context/RepoContext';
 
 export const Navbar: React.FC = () => {
   const router = useRouter();
+  const { loadNewRepo, loadingRepo } = useRepo();
   const [graphStatus, setGraphStatus] = useState<{
     is_live: boolean;
     engine: string;
     instructions: string;
   } | null>(null);
-  const [showModal, setShowModal] = useState(false);
+  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [showRepoModal, setShowRepoModal] = useState(false);
+  const [newRepoInput, setNewRepoInput] = useState('');
+  const [ingestStatus, setIngestStatus] = useState<{ success: boolean; message: string } | null>(null);
 
   useEffect(() => {
     fetchGraphStatus().then(setGraphStatus).catch(() => null);
@@ -23,6 +28,25 @@ export const Navbar: React.FC = () => {
     { label: 'Evaluation Benchmark', href: '/eval', icon: '📊' },
   ];
 
+  const handleIngest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newRepoInput.trim()) return;
+    setIngestStatus(null);
+    const result = await loadNewRepo(newRepoInput.trim());
+    setIngestStatus(result);
+    if (result.success) {
+      setTimeout(() => {
+        setShowRepoModal(false);
+        setIngestStatus(null);
+        setNewRepoInput('');
+      }, 1500);
+    }
+  };
+
+  const handleQuickPreset = (repo: string) => {
+    setNewRepoInput(repo);
+  };
+
   return (
     <>
       <header className="sticky top-0 z-40 w-full border-b border-gray-800 bg-[#090d16]/90 backdrop-blur">
@@ -34,9 +58,6 @@ export const Navbar: React.FC = () => {
               </span>
               <span className="font-bold tracking-tight text-white sm:text-lg">
                 DecisionTrail
-              </span>
-              <span className="hidden rounded bg-blue-950/80 px-2 py-0.5 text-xs font-semibold text-blue-400 border border-blue-800/60 sm:inline-block">
-                psf/black
               </span>
             </Link>
 
@@ -61,11 +82,21 @@ export const Navbar: React.FC = () => {
             </nav>
           </div>
 
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-2.5">
+            {/* Quick Ingest Button */}
+            <button
+              onClick={() => setShowRepoModal(true)}
+              className="flex items-center space-x-1.5 rounded-lg bg-emerald-600/20 border border-emerald-500/40 px-3 py-1.5 text-xs font-semibold text-emerald-300 hover:bg-emerald-600/30 transition shadow-sm"
+              title="Add any public GitHub repo to DecisionTrail"
+            >
+              <span>➕</span>
+              <span>Load Repo</span>
+            </button>
+
             {/* Neo4j / Graph Status Pill */}
             {graphStatus && (
               <button
-                onClick={() => setShowModal(true)}
+                onClick={() => setShowStatusModal(true)}
                 className={`flex items-center space-x-1.5 rounded-full px-2.5 py-1 text-xs font-medium border transition ${
                   graphStatus.is_live
                     ? 'bg-emerald-950/70 text-emerald-300 border-emerald-700/60 hover:bg-emerald-900/60'
@@ -115,8 +146,112 @@ export const Navbar: React.FC = () => {
         </div>
       </header>
 
-      {/* Graph Status Modal */}
-      {showModal && (
+      {/* Ingest Repository Modal */}
+      {showRepoModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
+          <div className="w-full max-w-lg rounded-xl border border-gray-800 bg-[#0e1424] p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-gray-800 pb-3">
+              <h3 className="font-bold text-white text-base flex items-center space-x-2">
+                <span>🔍 Load Any GitHub Repository</span>
+              </h3>
+              <button
+                onClick={() => {
+                  setShowRepoModal(false);
+                  setIngestStatus(null);
+                }}
+                className="text-gray-400 hover:text-white text-sm"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-xs text-gray-300">
+              Enter any public GitHub repository link (e.g. <code className="text-emerald-400">https://github.com/jitsi/jitsi-meet</code> or <code className="text-emerald-400">facebook/react</code>). DecisionTrail will automatically ingest recent discussions, filter noise, extract decisions with verbatim quotes, and display them at the top!
+            </p>
+
+            <form onSubmit={handleIngest} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-400 mb-1">
+                  GitHub Repository URL or <code className="text-blue-400">owner/repo</code>
+                </label>
+                <input
+                  type="text"
+                  value={newRepoInput}
+                  onChange={(e) => setNewRepoInput(e.target.value)}
+                  placeholder="e.g. https://github.com/jitsi/jitsi-meet or astral-sh/uv"
+                  className="w-full rounded-lg border border-gray-700 bg-gray-900 px-3.5 py-2.5 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  disabled={loadingRepo}
+                />
+              </div>
+
+              {/* Quick Presets */}
+              <div className="space-y-1.5">
+                <span className="text-[11px] text-gray-400 font-medium">Quick Suggestions:</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {['jitsi/jitsi-meet', 'django/django', 'psf/black', 'astral-sh/uv', 'pallets/flask'].map(
+                    (preset) => (
+                      <button
+                        type="button"
+                        key={preset}
+                        onClick={() => handleQuickPreset(preset)}
+                        className="rounded bg-gray-800/80 hover:bg-gray-700 border border-gray-700/60 px-2 py-0.5 text-xs text-gray-300 font-mono transition"
+                      >
+                        {preset}
+                      </button>
+                    )
+                  )}
+                </div>
+              </div>
+
+              {ingestStatus && (
+                <div
+                  className={`rounded-lg p-3 text-xs border ${
+                    ingestStatus.success
+                      ? 'bg-emerald-950/70 border-emerald-800/80 text-emerald-300'
+                      : 'bg-red-950/70 border-red-800/80 text-red-300'
+                  }`}
+                >
+                  {ingestStatus.message}
+                </div>
+              )}
+
+              <div className="flex items-center justify-end space-x-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowRepoModal(false);
+                    setIngestStatus(null);
+                  }}
+                  className="rounded-lg px-4 py-2 text-xs font-medium text-gray-400 hover:text-white"
+                  disabled={loadingRepo}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={loadingRepo || !newRepoInput.trim()}
+                  className="flex items-center space-x-2 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-50 shadow-md shadow-emerald-600/30 transition"
+                >
+                  {loadingRepo ? (
+                    <>
+                      <span className="animate-spin">⏳</span>
+                      <span>Ingesting & Extracting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>🚀</span>
+                      <span>Load Repo</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Graph Status Diagnostics Modal */}
+      {showStatusModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
           <div className="w-full max-w-lg rounded-xl border border-gray-800 bg-[#0e1424] p-6 shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-gray-800 pb-3">
@@ -124,7 +259,7 @@ export const Navbar: React.FC = () => {
                 <span>🕸️ Knowledge Graph Diagnostics</span>
               </h3>
               <button
-                onClick={() => setShowModal(false)}
+                onClick={() => setShowStatusModal(false)}
                 className="text-gray-400 hover:text-white text-sm"
               >
                 ✕
@@ -176,21 +311,8 @@ export const Navbar: React.FC = () => {
                   <li>
                     <strong className="text-gray-200">Local Docker:</strong> Run <code>docker compose up -d</code>.
                   </li>
-                  <li>
-                    <strong className="text-gray-200">Diagnostic Check:</strong> Run{' '}
-                    <code>python scripts/check_neo4j.py</code> to test your connection anytime!
-                  </li>
                 </ol>
               </div>
-            </div>
-
-            <div className="pt-2 flex justify-end">
-              <button
-                onClick={() => setShowModal(false)}
-                className="rounded-lg bg-blue-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-blue-500 transition"
-              >
-                Close
-              </button>
             </div>
           </div>
         </div>

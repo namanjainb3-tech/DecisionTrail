@@ -1,12 +1,25 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { analyzePR } from '../lib/api';
 import { FeedbackWidget } from '../components/FeedbackWidget';
+import { useRepo } from '../context/RepoContext';
 
 export default function PRSimulatorPage() {
-  const [repo, setRepo] = useState('psf/black');
+  const { activeRepo } = useRepo();
+  const [repo, setRepo] = useState(activeRepo !== 'all' ? activeRepo : 'psf/black');
   const [changedFiles, setChangedFiles] = useState('src/black/linegen.py\nsrc/black/__init__.py');
   const [prTitle, setPrTitle] = useState('Change default line length to 79 characters for strict PEP 8 compliance');
   const [diffSummary, setDiffSummary] = useState('Replaces 88-character limit with 79 characters to align with PEP 8 standards.');
+
+  useEffect(() => {
+    if (activeRepo && activeRepo !== 'all') {
+      setRepo(activeRepo);
+      if (activeRepo.includes('django')) {
+        applyPreset('django-session-keys');
+      } else if (activeRepo.includes('black')) {
+        applyPreset('black-line-length');
+      }
+    }
+  }, [activeRepo]);
   
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{
@@ -44,6 +57,16 @@ export default function PRSimulatorPage() {
       setChangedFiles('src/black/linegen.py\nsrc/black/__init__.py');
       setPrTitle('Change default line length to 79 characters for strict PEP 8 compliance');
       setDiffSummary('Replaces 88-character limit with 79 characters to align with PEP 8 standards.');
+    } else if (presetName === 'django-session-keys') {
+      setRepo('django/django');
+      setChangedFiles('django/contrib/sessions/backends/base.py');
+      setPrTitle('Store raw plaintext session keys in session store instead of hashing');
+      setDiffSummary('Reverts SESSION_STORE_KEY_HASH and uses plain unhashed session keys.');
+    } else if (presetName === 'django-tabular-delete') {
+      setRepo('django/django');
+      setChangedFiles('django/contrib/admin/options.py');
+      setPrTitle('Show Delete checkbox in TabularInline when deletion is disallowed');
+      setDiffSummary('Renders Delete? column in TabularInline for extra form rows.');
     } else if (presetName === 'black-quotes') {
       setRepo('psf/black');
       setChangedFiles('src/black/strings.py\nsrc/black/trans.py');
@@ -94,10 +117,24 @@ export default function PRSimulatorPage() {
                 <span className="text-gray-500 text-[11px]">Presets:</span>
                 <button
                   type="button"
+                  onClick={() => applyPreset('django-session-keys')}
+                  className="rounded bg-emerald-950/70 border border-emerald-800/80 px-2 py-0.5 text-emerald-300 hover:bg-emerald-900/80 font-mono text-[11px]"
+                >
+                  django: session-hash
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyPreset('django-tabular-delete')}
+                  className="rounded bg-emerald-950/70 border border-emerald-800/80 px-2 py-0.5 text-emerald-300 hover:bg-emerald-900/80 font-mono text-[11px]"
+                >
+                  django: admin-delete
+                </button>
+                <button
+                  type="button"
                   onClick={() => applyPreset('black-line-length')}
                   className="rounded bg-gray-800 px-2 py-0.5 text-blue-400 hover:bg-gray-700 font-mono text-[11px]"
                 >
-                  line-length (88 vs 79)
+                  black: line-length (88 vs 79)
                 </button>
                 <button
                   type="button"

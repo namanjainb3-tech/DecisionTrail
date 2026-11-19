@@ -11,10 +11,45 @@ import {
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 const FORCE_MOCK = process.env.NEXT_PUBLIC_USE_MOCK === 'true';
 
+export async function fetchRepositories(): Promise<string[]> {
+  try {
+    const res = await fetch(`${API_BASE}/repositories`, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    return data.length > 0 ? data : ['psf/black', 'django/django'];
+  } catch (err) {
+    console.warn('API /repositories unavailable, using default list:', err);
+    return ['psf/black', 'django/django'];
+  }
+}
+
+export async function ingestRepository(
+  repo: string,
+  limit: number = 10
+): Promise<{
+  status: string;
+  repo: string;
+  documents_ingested: number;
+  decisions_extracted: number;
+}> {
+  const res = await fetch(`${API_BASE}/ingest/github`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ repo, limit }),
+    signal: AbortSignal.timeout(120000), // 120s timeout so large repos never abort prematurely
+  });
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(errorText || `Failed to ingest repository (HTTP ${res.status})`);
+  }
+  return await res.json();
+}
+
 export async function fetchDecisions(params?: {
   q?: string;
   path?: string;
   outcome?: string;
+  repo?: string;
   limit?: number;
 }): Promise<Decision[]> {
   if (FORCE_MOCK) {
@@ -26,12 +61,13 @@ export async function fetchDecisions(params?: {
     if (params?.q) url.searchParams.append('q', params.q);
     if (params?.path) url.searchParams.append('path', params.path);
     if (params?.outcome) url.searchParams.append('outcome', params.outcome);
+    if (params?.repo && params.repo !== 'all') url.searchParams.append('repo', params.repo);
     if (params?.limit) url.searchParams.append('limit', params.limit.toString());
 
     const res = await fetch(url.toString(), { signal: AbortSignal.timeout(8000) });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
-    return data.length > 0 ? data : MOCK_DECISIONS;
+    return data.length > 0 ? data : (params?.repo ? [] : MOCK_DECISIONS);
   } catch (err) {
     console.warn('API /decisions unavailable, using mock data:', err);
     return filterMockDecisions(params);
@@ -55,7 +91,8 @@ export async function fetchDecision(id: string): Promise<Decision | null> {
 
 export async function fetchGraph(
   nodeId?: string,
-  depth: number = 2
+  depth: number = 2,
+  repo?: string
 ): Promise<{ nodes: GraphNode[]; edges: GraphEdge[] }> {
   if (FORCE_MOCK) {
     return MOCK_GRAPH_DATA as any;
@@ -65,6 +102,7 @@ export async function fetchGraph(
     const url = new URL(`${API_BASE}/graph`);
     if (nodeId) url.searchParams.append('node_id', nodeId);
     url.searchParams.append('depth', depth.toString());
+    if (repo && repo !== 'all') url.searchParams.append('repo', repo);
 
     const res = await fetch(url.toString(), { signal: AbortSignal.timeout(8000) });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -192,9 +230,17 @@ function filterMockDecisions(params?: {
   q?: string;
   path?: string;
   outcome?: string;
+  repo?: string;
   limit?: number;
 }): Decision[] {
   let list = [...MOCK_DECISIONS];
+  if (params?.repo && params.repo !== 'all') {
+    list = list.filter(
+      (d) =>
+        (d.repo_or_forum && d.repo_or_forum.toLowerCase().includes(params.repo!.toLowerCase())) ||
+        (d.thread_id && d.thread_id.toLowerCase().includes(params.repo!.toLowerCase()))
+    );
+  }
   if (params?.outcome) {
     list = list.filter((d) => d.outcome === params.outcome);
   }

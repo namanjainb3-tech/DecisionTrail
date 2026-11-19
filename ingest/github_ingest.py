@@ -76,15 +76,31 @@ def make_github_request(
         return do_fetch(c)
 
 
+def clean_repo_name(raw: str) -> str:
+    s = str(raw).strip()
+    if s.endswith(".git"):
+        s = s[:-4]
+    if "github.com" in s:
+        parts = s.split("github.com/")[-1].split("/")
+        if len(parts) >= 2:
+            return f"{parts[0]}/{parts[1]}".strip("/")
+    parts = [p for p in s.strip("/").split("/") if p]
+    if len(parts) >= 2:
+        return f"{parts[-2]}/{parts[-1]}"
+    return s
+
+
 def ingest_github_repo(
     repo: str,
-    limit: int = 300,
+    limit: int = 15,
     since: str | None = None,
     token: str | None = None,
     client: httpx.Client | None = None,
     db_path: Path | str | None = None,
     raw_dir: Path | None = None,
 ) -> list[Document]:
+    repo = clean_repo_name(repo)
+
     if not since:
         since = get_cursor("github", repo, db_path=db_path)
 
@@ -141,14 +157,16 @@ def ingest_github_repo(
                     )
                 )
 
-            # 2. Fetch issue comments
+            # 2. Fetch issue comments only if thread has comments
             comments_url = item.get("comments_url")
-            if comments_url:
+            has_comments = item.get("comments", 1) > 0
+            if comments_url and has_comments:
                 try:
                     c_list = make_github_request(
                         comments_url, token=token, client=client, raw_dir=raw_dir
                     )
-                    for c_item in c_list:
+                    # Limit to first 25 high-signal comments per thread
+                    for c_item in c_list[:25]:
                         c_author = c_item.get("user", {}).get("login", "unknown")
                         c_body = c_item.get("body") or ""
                         if is_bot_account(c_author) or not c_body.strip():
@@ -180,7 +198,7 @@ def ingest_github_repo(
                     r_comments = make_github_request(
                         review_comments_url, token=token, client=client, raw_dir=raw_dir
                     )
-                    for r_item in r_comments:
+                    for r_item in r_comments[:15]:
                         r_author = r_item.get("user", {}).get("login", "unknown")
                         r_body = r_item.get("body") or ""
                         if is_bot_account(r_author) or not r_body.strip():

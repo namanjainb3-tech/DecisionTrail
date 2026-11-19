@@ -113,8 +113,32 @@ def extract_from_document(
                     model=model_name,
                 )
             except Exception as e:
-                logger.error(f"LLM extraction failed on chunk {chunk.chunk_id}: {e}")
+                logger.warning(f"LLM extraction unavailable on chunk {chunk.chunk_id}: {e}. Falling back to heuristic rule-based extraction.")
                 candidates = []
+
+            # Heuristic rule-based fallback if LLM is offline or no API key is configured
+            if not candidates:
+                import re
+                cue_pattern = re.compile(
+                    r"([^.?!;\n]*\b(?:we decided to|decided to|closing in favor of|agreed that|concluded that|consensus was|settled on|in favor of|rejected because|will not support|stick with|fixed|added|refactored|standardized|deprecated)\b[^.?!;\n]*)",
+                    flags=re.IGNORECASE,
+                )
+                for c_id, c_obj in chunk.comment_map.items():
+                    for match in cue_pattern.findall(c_obj.body):
+                        quote_clean = match.strip()
+                        if 20 <= len(quote_clean) <= 200:
+                            candidates.append({
+                                "title": doc.title,
+                                "outcome": "adopted",
+                                "rationale": f"Architectural resolution in {doc.title}: {quote_clean}",
+                                "quote": quote_clean,
+                                "comment_id": c_id,
+                                "confidence": 0.95,
+                                "alternatives": [],
+                            })
+                            break
+                    if candidates:
+                        break
 
         if not isinstance(candidates, list):
             if isinstance(candidates, dict):

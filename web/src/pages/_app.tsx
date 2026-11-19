@@ -3,10 +3,11 @@ import type { AppProps } from 'next/app';
 import Head from 'next/head';
 import '../styles/globals.css';
 import { Navbar } from '../components/Navbar';
+import { RepoProvider } from '../context/RepoContext';
 
 export default function MyApp({ Component, pageProps }: AppProps) {
   return (
-    <>
+    <RepoProvider>
       <Head>
         <title>DecisionTrail — Verifiable Architectural Decisions</title>
         <meta name="description" content="Surfaces past architectural and design decisions with verbatim verified citations." />
@@ -21,7 +22,7 @@ export default function MyApp({ Component, pageProps }: AppProps) {
           DecisionTrail • 100% Verifiable Source Traceability • RapidFuzz Machine-Verified Quotes
         </footer>
       </div>
-    </>
+    </RepoProvider>
   );
 }
 

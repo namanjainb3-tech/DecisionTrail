@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { fetchGraph, fetchGraphStatus } from '../lib/api';
 import { GraphNode, GraphEdge } from '../lib/mockData';
 import { OutcomeBadge } from '../components/SourceBadge';
+import { useRepo } from '../context/RepoContext';
 
 interface SimulationNode extends GraphNode {
   x: number;
@@ -13,6 +14,7 @@ interface SimulationNode extends GraphNode {
 }
 
 export default function GraphPage() {
+  const { activeRepo } = useRepo();
   const [nodes, setNodes] = useState<GraphNode[]>([]);
   const [edges, setEdges] = useState<GraphEdge[]>([]);
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
@@ -31,15 +33,17 @@ export default function GraphPage() {
     setLoading(true);
     try {
       const [data, status] = await Promise.all([
-        fetchGraph(centerId),
+        fetchGraph(centerId, 2, activeRepo),
         fetchGraphStatus(),
       ]);
       setNodes(data.nodes);
       setEdges(data.edges);
       setGraphStatus(status);
       initSimulation(data.nodes, data.edges);
-      if (data.nodes.length > 0 && !selectedNode) {
+      if (data.nodes.length > 0) {
         setSelectedNode(data.nodes[0]);
+      } else {
+        setSelectedNode(null);
       }
     } catch (err) {
       console.error(err);
@@ -50,7 +54,7 @@ export default function GraphPage() {
 
   useEffect(() => {
     loadGraphData();
-  }, []);
+  }, [activeRepo]);
 
   const getNodeColor = (type: string, outcome?: string) => {
     if (type === 'Decision') {

@@ -104,11 +104,24 @@ def health() -> dict[str, str]:
 @app.post("/ingest/github")
 def api_ingest_github(req: IngestGithubRequest) -> dict[str, Any]:
     try:
-        docs = ingest_github_repo(repo=req.repo, limit=req.limit, since=req.since)
+        from ingest.github_ingest import clean_repo_name
+        clean_repo = clean_repo_name(req.repo)
+
+        # Ingest recent issues and discussions
+        docs = ingest_github_repo(repo=clean_repo, limit=req.limit, since=req.since)
+        
+        # Automatically extract decisions and update knowledge graph
+        extracted = []
+        if docs:
+            new_threads = [d.thread_id for d in docs]
+            extracted = run_extraction_pipeline(thread_ids=new_threads)
+            rebuild_from_sqlite()
+
         return {
             "status": "success",
-            "repo": req.repo,
+            "repo": clean_repo,
             "documents_ingested": len(docs),
+            "decisions_extracted": len(extracted),
         }
     except Exception as e:
         logger.exception("GitHub ingestion failed")
@@ -149,14 +162,21 @@ def api_extract_run(req: ExtractRunRequest) -> dict[str, Any]:
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/repositories")
+def list_repositories() -> list[str]:
+    from core.db_sqlite import get_repositories
+    return get_repositories()
+
+
 @app.get("/decisions")
 def list_decisions(
     q: str | None = None,
     path: str | None = None,
     outcome: str | None = None,
+    repo: str | None = None,
     limit: int = 50,
 ) -> list[dict[str, Any]]:
-    return get_decisions(q=q, path=path, outcome=outcome, limit=limit)
+    return get_decisions(q=q, path=path, outcome=outcome, repo=repo, limit=limit)
 
 
 @app.get("/decisions/{decision_id}")
@@ -188,6 +208,7 @@ def api_graph_status() -> dict[str, Any]:
 def get_graph(
     node_id: str | None = None,
     depth: int = 2,
+    repo: str | None = None,
 ) -> dict[str, Any]:
     state = get_mock_graph_state()
     if not state["nodes"]:
@@ -197,9 +218,41 @@ def get_graph(
     if node_id:
         return neighborhood(node_id=node_id, depth=depth)
 
-    # Return full graph snapshot
+    # Return full graph snapshot or filter by repo
     nodes = list(state["nodes"].values())
     edges = state["edges"]
+
+    if repo and repo.lower() != "all":
+        # Find all decision nodes matching the target repository
+        target_repo_clean = repo.lower().strip()
+        matching_dec_ids = {
+            n["id"]
+            for n in nodes
+            if n.get("label") == "Decision"
+            and (
+                target_repo_clean in n.get("repo_or_forum", "").lower()
+                or target_repo_clean in n.get("thread_id", "").lower()
+            )
+        }
+        # Gather all connected neighbors (sources, alternatives, files, authors)
+        connected_node_ids = set(matching_dec_ids)
+        filtered_edges = []
+        for e in edges:
+            if e["source"] in matching_dec_ids or e["target"] in matching_dec_ids:
+                connected_node_ids.add(e["source"])
+                connected_node_ids.add(e["target"])
+                filtered_edges.append(e)
+
+        filtered_nodes = [n for n in nodes if n["id"] in connected_node_ids]
+        return {
+            "nodes": filtered_nodes,
+            "edges": filtered_edges,
+            "summary": {
+                "node_count": len(filtered_nodes),
+                "edge_count": len(filtered_edges),
+            },
+        }
+
     return {
         "nodes": nodes,
         "edges": edges,

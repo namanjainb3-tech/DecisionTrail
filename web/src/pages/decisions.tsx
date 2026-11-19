@@ -4,14 +4,18 @@ import { Decision } from '../lib/mockData';
 import { DecisionCard } from '../components/DecisionCard';
 import { OutcomeBadge, PlatformBadge, ConfidenceBadge } from '../components/SourceBadge';
 import { QuoteViewer } from '../components/QuoteViewer';
+import { useRepo } from '../context/RepoContext';
 
 export default function DecisionsPage() {
+  const { loadNewRepo, loadingRepo } = useRepo();
   const [decisions, setDecisions] = useState<Decision[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedOutcome, setSelectedOutcome] = useState('');
   const [selectedPath, setSelectedPath] = useState('');
   const [activeDecision, setActiveDecision] = useState<Decision | null>(null);
+  const [repoInput, setRepoInput] = useState('');
+  const [ingestBanner, setIngestBanner] = useState<{ success: boolean; message: string } | null>(null);
 
   const loadData = async () => {
     setLoading(true);
@@ -22,8 +26,10 @@ export default function DecisionsPage() {
         path: selectedPath || undefined,
       });
       setDecisions(data);
-      if (data.length > 0 && !activeDecision) {
+      if (data.length > 0) {
         setActiveDecision(data[0]);
+      } else {
+        setActiveDecision(null);
       }
     } catch (err) {
       console.error(err);
@@ -39,6 +45,20 @@ export default function DecisionsPage() {
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     loadData();
+  };
+
+  const handleInlineIngest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!repoInput.trim()) return;
+    setIngestBanner(null);
+    const result = await loadNewRepo(repoInput.trim());
+    setIngestBanner(result);
+    if (result.success) {
+      setRepoInput('');
+      // Reload decisions immediately to bring new decisions to the top
+      await loadData();
+      setTimeout(() => setIngestBanner(null), 5000);
+    }
   };
 
   return (
@@ -58,6 +78,54 @@ export default function DecisionsPage() {
             {decisions.length} decisions indexed
           </span>
         </div>
+      </div>
+
+      {/* Streamlined "Load Any GitHub Repo" Bar (Clean - No active repo clutter) */}
+      <div className="rounded-xl border border-gray-800 bg-[#0e1424] p-4 shadow-xl">
+        <form onSubmit={handleInlineIngest} className="flex flex-col sm:flex-row items-center gap-3">
+          <div className="relative flex-1 w-full">
+            <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-gray-400 text-sm">
+              🔗
+            </span>
+            <input
+              type="text"
+              placeholder="Paste any GitHub repository link (e.g. https://github.com/jitsi/jitsi-meet, django/django, astral-sh/uv)..."
+              value={repoInput}
+              onChange={(e) => setRepoInput(e.target.value)}
+              disabled={loadingRepo}
+              className="w-full rounded-lg bg-gray-900 border border-gray-700/80 pl-10 pr-4 py-2.5 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={loadingRepo || !repoInput.trim()}
+            className="w-full sm:w-auto flex items-center justify-center space-x-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2.5 text-sm font-semibold shrink-0 disabled:opacity-50 transition shadow-lg shadow-emerald-900/40"
+          >
+            {loadingRepo ? (
+              <>
+                <span className="animate-spin">⏳</span>
+                <span>Ingesting & Extracting...</span>
+              </>
+            ) : (
+              <>
+                <span>🚀</span>
+                <span>Load Repo</span>
+              </>
+            )}
+          </button>
+        </form>
+
+        {ingestBanner && (
+          <div
+            className={`mt-3 rounded-lg p-3 text-xs border ${
+              ingestBanner.success
+                ? 'bg-emerald-950/70 border-emerald-800/80 text-emerald-300'
+                : 'bg-red-950/70 border-red-800/80 text-red-300'
+            }`}
+          >
+            {ingestBanner.message}
+          </div>
+        )}
       </div>
 
       {/* Filter and Search Bar */}
@@ -103,7 +171,7 @@ export default function DecisionsPage() {
 
       {/* Content Layout: List + Drawer */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Column: Decision Cards */}
+        {/* Left Column: Decision Cards (Latest Added Shown at the Top) */}
         <div className="lg:col-span-7 space-y-4">
           {loading ? (
             <div className="flex h-48 items-center justify-center rounded-xl border border-gray-800 bg-[#0e1424]">
@@ -112,13 +180,15 @@ export default function DecisionsPage() {
           ) : decisions.length === 0 ? (
             <div className="flex flex-col items-center justify-center p-12 text-center rounded-xl border border-dashed border-gray-800 bg-[#0e1424]/50">
               <span className="text-3xl mb-2">🔍</span>
-              <p className="text-sm font-medium text-gray-300">No decisions match your search criteria</p>
+              <p className="text-sm font-medium text-gray-300">
+                No decisions match your search criteria.
+              </p>
               <button
                 onClick={() => {
                   setSearchQuery('');
                   setSelectedOutcome('');
                   setSelectedPath('');
-                  fetchDecisions().then(setDecisions);
+                  loadData();
                 }}
                 className="mt-3 text-xs text-blue-400 underline hover:text-blue-300"
               >
@@ -209,4 +279,3 @@ export default function DecisionsPage() {
     </div>
   );
 }
-
