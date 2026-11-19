@@ -83,3 +83,4 @@ def resolve_canonical_person(
         )
 
     return canonical_id
+

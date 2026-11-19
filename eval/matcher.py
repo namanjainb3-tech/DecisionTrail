@@ -74,3 +74,4 @@ def judge_match(
         matched = sim >= 0.70
         reason = f"Fallback cosine similarity {sim:.3f} (>= 0.70)"
         return (matched, sim, reason)
+

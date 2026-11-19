@@ -21,3 +21,4 @@ Every extracted decision must pass a strict fuzzy string alignment check ($\ge 9
 ## Hallucination Defense Performance
 - **Adversarial Test**: A fabricated quote injected via fake LLM output was flagged by `verify_quote` and dropped immediately with zero evidence surviving.
 - **Precision Guarantee**: 100% of stored decisions in `decisions` table possess machine-verified quotes.
+

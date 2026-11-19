@@ -75,97 +75,187 @@ export interface EvalSummary {
 
 export const MOCK_DECISIONS: Decision[] = [
   {
-    id: "dec_uv_resolver_01",
-    repo_or_forum: "astral-sh/uv",
-    thread_id: "github_astral-sh/uv_101",
-    title: "Implement standalone PubGrub resolver in Rust",
+    id: "dec_black_line_length_01",
+    repo_or_forum: "psf/black",
+    thread_id: "github_psf/black_1",
+    title: "Standardize default line length to 88 characters",
     outcome: "adopted",
-    rationale: "Implementing PubGrub in Rust allows complete independence from pip while matching exact backtracking semantics with 10x-100x performance gains.",
+    rationale: "88 characters is approximately 10% longer than 80, which significantly reduces vertical line explosion and AST splitting while fitting comfortably side-by-side on modern displays.",
     alternatives: [
       {
-        text: "Fork pip's internal resolvelib wrapper directly",
-        reason: "Tightly coupled to Python interpreter startup overhead and pip's rapid internal changes.",
+        text: "Strict 79-character limit (standard PEP 8)",
+        reason: "Causes excessive vertical splitting of expressions, nested calls, and comprehensions on modern displays.",
         evidence: {
-          source_url: "https://github.com/astral-sh/uv/issues/101#issuecomment-1",
+          source_url: "https://github.com/psf/black/issues/1",
           platform: "github_issue",
-          author_handle: "charliermarsh",
-          posted_at: "2024-02-15T10:30:00Z",
-          quote: "Wrapping resolvelib in Python would mean we're bound to Python runtime latency; a native PubGrub port gives us sub-millisecond backtracking."
+          author_handle: "ambv",
+          posted_at: "2018-03-24T18:30:00Z",
+          quote: "79 is too short for modern codebases; it forces awkward line wrapping for trivial expressions."
         }
       },
       {
-        text: "Use libsolv SAT solver bindings",
-        reason: "SAT solvers lack version constraint backtrack explanations needed for readable error diagnostics.",
+        text: "Configurable line length per repository without defaults",
+        reason: "Defeats the core uncompromising design goal of Black, which is to eliminate styling debates across teams.",
         evidence: {
-          source_url: "https://github.com/astral-sh/uv/issues/101#issuecomment-2",
+          source_url: "https://github.com/psf/black/issues/1",
           platform: "github_issue",
-          author_handle: "konstin",
-          posted_at: "2024-02-15T11:45:00Z",
-          quote: "While libsolv is fast, diagnosing why a dependency resolution failed is painful without PubGrub's error derivation graph."
+          author_handle: "ambv",
+          posted_at: "2018-03-24T19:00:00Z",
+          quote: "Black is opinionated so you don't have to debate styling in code reviews."
         }
       }
     ],
     evidence: [
       {
-        source_url: "https://github.com/astral-sh/uv/pull/120",
-        platform: "github_pr",
-        author_handle: "charliermarsh",
-        posted_at: "2024-02-16T14:20:00Z",
-        quote: "We decided to write a bespoke PubGrub implementation in crates/uv-resolver tailored specifically for PyPI metadata."
+        source_url: "https://github.com/psf/black/issues/1",
+        platform: "github_issue",
+        author_handle: "ambv",
+        posted_at: "2018-03-24T18:00:00Z",
+        quote: "88 was chosen because it's roughly 10% longer than 80, which turns out to make code look much better without being too long."
+      }
+    ],
+    confidence: 0.99,
+    decided_at: "2018-03-24T18:00:00Z",
+    linked_paths: ["src/black/linegen.py", "src/black/__init__.py"],
+    extractor_model: "gpt-oss-20b"
+  },
+  {
+    id: "dec_black_strings_02",
+    repo_or_forum: "psf/black",
+    thread_id: "github_psf/black_87",
+    title: "Normalize all string literals to double quotes",
+    outcome: "adopted",
+    rationale: "Standardizing on double quotes prevents escaping apostrophes in English prose and eliminates noisy git diff churn caused by subjective quote preferences.",
+    alternatives: [
+      {
+        text: "Preserve author-preferred single quotes",
+        reason: "Leaves inconsistent quote styling in codebases and creates merge conflicts on neighboring line edits.",
+        evidence: {
+          source_url: "https://github.com/psf/black/issues/87",
+          platform: "github_issue",
+          author_handle: "zsol",
+          posted_at: "2018-04-12T15:00:00Z",
+          quote: "Allowing single quotes creates ongoing stylistic disagreements between contributors."
+        }
+      }
+    ],
+    evidence: [
+      {
+        source_url: "https://github.com/psf/black/issues/87",
+        platform: "github_issue",
+        author_handle: "ambv",
+        posted_at: "2018-04-12T14:30:00Z",
+        quote: "Black standardizes on double quotes for strings to eliminate churn and ensure consistency across codebases."
       }
     ],
     confidence: 0.98,
-    decided_at: "2024-02-16T14:20:00Z",
-    linked_paths: ["crates/uv-resolver/src/lib.rs", "crates/uv-resolver/src/pubgrub.rs"],
+    decided_at: "2018-04-12T14:30:00Z",
+    linked_paths: ["src/black/strings.py", "src/black/trans.py"],
     extractor_model: "gpt-oss-20b"
   },
   {
-    id: "dec_uv_cache_02",
-    repo_or_forum: "astral-sh/uv",
-    thread_id: "github_astral-sh/uv_245",
-    title: "Store unpacked wheels directly in CAS global cache",
+    id: "dec_black_trailing_comma_03",
+    repo_or_forum: "psf/black",
+    thread_id: "github_psf/black_114",
+    title: "Magic trailing comma multi-line parameter explosion",
     outcome: "adopted",
-    rationale: "Unpacking wheels once into Content-Addressable Storage enables hardlinking into virtualenvs with zero copy overhead.",
+    rationale: "If the author includes a trailing comma, Black treats it as an explicit directive to explode parameters across multiple lines with one argument per line for minimal diff churn.",
     alternatives: [
       {
-        text: "Symlink wheel files directly into site-packages",
-        reason: "Breaks Windows compatibility where developer symlinks require elevated permissions or Developer Mode.",
+        text: "Always collapse lists if total length is under 88 characters",
+        reason: "Collapses collections that intentionally have trailing commas, making adding items create ugly two-line diffs.",
         evidence: {
-          source_url: "https://github.com/astral-sh/uv/issues/245#issuecomment-3",
+          source_url: "https://github.com/psf/black/issues/114",
           platform: "github_issue",
-          author_handle: "charliermarsh",
-          posted_at: "2024-03-01T09:15:00Z",
-          quote: "Symlinks on Windows fail silently without Developer Mode; hardlinks or reflinks across the same filesystem work uniformly."
+          author_handle: "ambv",
+          posted_at: "2018-05-02T17:00:00Z",
+          quote: "Collapsing collections that intentionally have trailing commas makes adding items create ugly two-line diffs."
         }
       }
     ],
     evidence: [
       {
-        source_url: "https://github.com/astral-sh/uv/pull/260",
-        platform: "github_pr",
-        author_handle: "konstin",
-        posted_at: "2024-03-02T16:00:00Z",
-        quote: "We settle on a hardlink-first strategy with fallback to copy-on-write reflinks for wheel caching."
+        source_url: "https://github.com/psf/black/issues/114",
+        platform: "github_issue",
+        author_handle: "zsol",
+        posted_at: "2018-05-02T16:15:00Z",
+        quote: "A trailing comma indicates the author wants this collection on multiple lines for clean git diffs."
       }
     ],
-    confidence: 0.96,
-    decided_at: "2024-03-02T16:00:00Z",
-    linked_paths: ["crates/uv-cache/src/lib.rs", "crates/uv-installer/src/site_packages.rs"],
+    confidence: 0.97,
+    decided_at: "2018-05-02T16:15:00Z",
+    linked_paths: ["src/black/brackets.py", "src/black/linegen.py"],
     extractor_model: "gpt-oss-20b"
   },
   {
-    id: "dec_pep582_01",
+    id: "dec_black_revert_hex_04",
+    repo_or_forum: "psf/black",
+    thread_id: "github_psf/black_585",
+    title: "Revert uppercase hexadecimal numeric literal normalization",
+    outcome: "reverted",
+    rationale: "Automatically transforming hex literals (0xff -> 0xFF) broke bitwise flags and hardware register definitions in embedded Python libraries.",
+    alternatives: [
+      {
+        text: "Strictly uppercase all hexadecimal numbers to 0xFF",
+        reason: "Violated hardware mask conventions where lowercase represents specific bit fields.",
+        evidence: {
+          source_url: "https://github.com/psf/black/pull/585",
+          platform: "github_pr",
+          author_handle: "ambv",
+          posted_at: "2018-10-14T20:00:00Z",
+          quote: "Reverting automatic hex capitalization because it broke low-level bitmask conventions and register definitions."
+        }
+      }
+    ],
+    evidence: [
+      {
+        source_url: "https://github.com/psf/black/pull/585",
+        platform: "github_pr",
+        author_handle: "ambv",
+        posted_at: "2018-10-14T20:00:00Z",
+        quote: "Reverting automatic hex capitalization because it broke low-level bitmask conventions and register definitions."
+      }
+    ],
+    confidence: 0.99,
+    decided_at: "2018-10-14T20:00:00Z",
+    linked_paths: ["src/black/numerics.py", "src/black/__init__.py"],
+    extractor_model: "gpt-oss-20b"
+  },
+  {
+    id: "dec_black_py36_05",
+    repo_or_forum: "psf/black",
+    thread_id: "github_psf/black_165",
+    title: "Require Python 3.6+ runtime for native AST parsing",
+    outcome: "adopted",
+    rationale: "Python 3.6 introduced f-strings and variable annotations which cannot be safely parsed on older Python interpreters without syntax errors.",
+    alternatives: [],
+    evidence: [
+      {
+        source_url: "https://github.com/psf/black/pull/165",
+        platform: "github_pr",
+        author_handle: "ambv",
+        posted_at: "2018-05-20T11:00:00Z",
+        quote: "Black requires Python 3.6 to run because it uses f-strings and variable annotations extensively."
+      }
+    ],
+    confidence: 0.96,
+    decided_at: "2018-05-20T11:00:00Z",
+    linked_paths: ["src/black/parsing.py", "pyproject.toml"],
+    extractor_model: "gpt-oss-20b"
+  },
+  {
+    id: "dec_pep582_06",
     repo_or_forum: "discourse",
     thread_id: "discourse_discuss.python.org_t_pep-582_4589",
     title: "Reject PEP 582 __pypackages__ directory specification",
     outcome: "rejected",
-    rationale: "Implicit __pypackages__ directory lookup creates security vulnerabilities in shared filesystems and conflicts with isolated virtual environment tooling.",
+    rationale: "Implicit directory lookup creates security vulnerabilities in shared filesystems and conflicts with isolated virtual environment tooling.",
     alternatives: [
       {
         text: "Enable __pypackages__ only when explicit flag is passed to Python CLI",
-        reason: "Defeats the primary ergonomics purpose of PEP 582 which was to make virtualenv management invisible for beginners.",
+        reason: "Defeats the primary ergonomics promise of making virtualenv management invisible for beginners.",
         evidence: {
-          source_url: "https://discuss.python.org/t/pep-582-python-local-packages-directory/4589/42",
+          source_url: "https://discuss.python.org/t/pep-582-python-local-packages-directory/4589",
           platform: "discourse",
           author_handle: "pradyunsg",
           posted_at: "2023-03-12T18:00:00Z",
@@ -175,7 +265,7 @@ export const MOCK_DECISIONS: Decision[] = [
     ],
     evidence: [
       {
-        source_url: "https://discuss.python.org/t/pep-582-python-local-packages-directory/4589/88",
+        source_url: "https://discuss.python.org/t/pep-582-python-local-packages-directory/4589",
         platform: "discourse",
         author_handle: "brettcannon",
         posted_at: "2023-03-15T21:30:00Z",
@@ -188,18 +278,18 @@ export const MOCK_DECISIONS: Decision[] = [
     extractor_model: "gpt-oss-20b"
   },
   {
-    id: "dec_pep695_01",
+    id: "dec_pep695_07",
     repo_or_forum: "discourse",
     thread_id: "discourse_discuss.python.org_t_pep-695_24510",
-    title: "Introduce dedicated 'type' statement and bracketed type parameters",
+    title: "Adopt dedicated 'type' statement and bracketed type parameters",
     outcome: "adopted",
     rationale: "First-class syntax `type Alias = ...` eliminates TypeVar boilerplate and makes generic variance automatically inferred.",
     alternatives: [
       {
-        text: "Use typing.TypeAlias with runtime assignment",
-        reason: "Does not allow forward references cleanly and prevents static checkers from inferring variance lazily.",
+        text: "Reuse typing.TypeAlias with runtime assignment",
+        reason: "Does not allow forward references cleanly and causes circular import deadlocks for complex type graphs.",
         evidence: {
-          source_url: "https://discuss.python.org/t/pep-695-type-parameter-syntax/24510/14",
+          source_url: "https://discuss.python.org/t/pep-695-type-parameter-syntax/24510",
           platform: "discourse",
           author_handle: "erictraut",
           posted_at: "2023-04-10T11:00:00Z",
@@ -209,7 +299,7 @@ export const MOCK_DECISIONS: Decision[] = [
     ],
     evidence: [
       {
-        source_url: "https://discuss.python.org/t/pep-695-type-parameter-syntax/24510/55",
+        source_url: "https://discuss.python.org/t/pep-695-type-parameter-syntax/24510",
         platform: "discourse",
         author_handle: "gvanrossum",
         posted_at: "2023-04-20T19:40:00Z",
@@ -220,33 +310,86 @@ export const MOCK_DECISIONS: Decision[] = [
     decided_at: "2023-04-20T19:40:00Z",
     linked_paths: ["Grammar/python.gram", "Python/ast.c"],
     extractor_model: "gpt-oss-20b"
+  },
+  {
+    id: "dec_pep703_08",
+    repo_or_forum: "discourse",
+    thread_id: "discourse_discuss.python.org_t_pep-703_28096",
+    title: "Make Global Interpreter Lock optional in CPython (No-GIL)",
+    outcome: "adopted",
+    rationale: "Multi-core scalability for CPU-bound Python workloads requires eliminating the GIL as a compile-time build option with mimalloc thread-safe memory management.",
+    alternatives: [
+      {
+        text: "Dynamically enable the GIL for single-threaded scripts and disable only when threads spawn",
+        reason: "Thread-switching race conditions during retroactive GIL-disabling lead to intractable memory model bugs.",
+        evidence: {
+          source_url: "https://discuss.python.org/t/pep-703-making-the-global-interpreter-lock-optional-in-cpython/28096",
+          platform: "discourse",
+          author_handle: "colesbury",
+          posted_at: "2023-07-28T16:00:00Z",
+          quote: "Dynamically toggling the GIL mid-execution introduces severe race conditions when multiple threads begin execution."
+        }
+      }
+    ],
+    evidence: [
+      {
+        source_url: "https://discuss.python.org/t/pep-703-making-the-global-interpreter-lock-optional-in-cpython/28096",
+        platform: "discourse",
+        author_handle: "colesbury",
+        posted_at: "2023-07-28T18:00:00Z",
+        quote: "The Steering Council accepts PEP 703 in principle, making the GIL optional as an experimental build mode."
+      }
+    ],
+    confidence: 0.98,
+    decided_at: "2023-07-28T18:00:00Z",
+    linked_paths: ["Python/ceval.c", "Include/internal/pycore_ceval.h"],
+    extractor_model: "gpt-oss-20b"
   }
 ];
 
 export const MOCK_GRAPH_DATA = {
   nodes: [
-    { id: "dec_uv_resolver_01", type: "Decision", title: "Implement standalone PubGrub resolver in Rust", outcome: "adopted" },
-    { id: "dec_uv_cache_02", type: "Decision", title: "Store unpacked wheels directly in CAS global cache", outcome: "adopted" },
-    { id: "dec_pep582_01", type: "Decision", title: "Reject PEP 582 __pypackages__ directory specification", outcome: "rejected" },
-    { id: "dec_pep695_01", type: "Decision", title: "Introduce dedicated 'type' statement and bracketed type parameters", outcome: "adopted" },
-    { id: "crates/uv-resolver/src/lib.rs", type: "File", path: "crates/uv-resolver/src/lib.rs" },
-    { id: "crates/uv-cache/src/lib.rs", type: "File", path: "crates/uv-cache/src/lib.rs" },
+    { id: "dec_black_line_length_01", type: "Decision", title: "Standardize default line length to 88 characters", outcome: "adopted" },
+    { id: "dec_black_strings_02", type: "Decision", title: "Normalize all string literals to double quotes", outcome: "adopted" },
+    { id: "dec_black_trailing_comma_03", type: "Decision", title: "Magic trailing comma multi-line parameter explosion", outcome: "adopted" },
+    { id: "dec_black_revert_hex_04", type: "Decision", title: "Revert uppercase hexadecimal numeric literal normalization", outcome: "reverted" },
+    { id: "dec_black_py36_05", type: "Decision", title: "Require Python 3.6+ runtime for native AST parsing", outcome: "adopted" },
+    { id: "dec_pep582_06", type: "Decision", title: "Reject PEP 582 __pypackages__ directory specification", outcome: "rejected" },
+    { id: "dec_pep695_07", type: "Decision", title: "Adopt dedicated 'type' statement and bracketed type parameters", outcome: "adopted" },
+    { id: "dec_pep703_08", type: "Decision", title: "Make Global Interpreter Lock optional in CPython (No-GIL)", outcome: "adopted" },
+    { id: "src/black/linegen.py", type: "File", path: "src/black/linegen.py" },
+    { id: "src/black/strings.py", type: "File", path: "src/black/strings.py" },
+    { id: "src/black/brackets.py", type: "File", path: "src/black/brackets.py" },
+    { id: "src/black/numerics.py", type: "File", path: "src/black/numerics.py" },
     { id: "Lib/site.py", type: "File", path: "Lib/site.py" },
-    { id: "charliermarsh", type: "Person", name: "Charlie Marsh", handle: "charliermarsh" },
-    { id: "konstin", type: "Person", name: "Konsti", handle: "konstin" },
+    { id: "Grammar/python.gram", type: "File", path: "Grammar/python.gram" },
+    { id: "ambv", type: "Person", name: "Łukasz Langa", handle: "ambv" },
+    { id: "zsol", type: "Person", name: "Zsolt Dollenstein", handle: "zsol" },
     { id: "brettcannon", type: "Person", name: "Brett Cannon", handle: "brettcannon" },
-    { id: "src_uv_pr120", type: "Source", url: "https://github.com/astral-sh/uv/pull/120" },
-    { id: "src_pep582_disc", type: "Source", url: "https://discuss.python.org/t/pep-582/4589" }
+    { id: "gvanrossum", type: "Person", name: "Guido van Rossum", handle: "gvanrossum" },
+    { id: "colesbury", type: "Person", name: "Sam Gross", handle: "colesbury" },
+    { id: "src_black_issue_1", type: "Source", url: "https://github.com/psf/black/issues/1" },
+    { id: "src_black_issue_87", type: "Source", url: "https://github.com/psf/black/issues/87" },
+    { id: "src_black_pull_585", type: "Source", url: "https://github.com/psf/black/pull/585" },
+    { id: "src_pep582", type: "Source", url: "https://discuss.python.org/t/pep-582-python-local-packages-directory/4589" }
   ],
   edges: [
-    { source: "dec_uv_resolver_01", target: "crates/uv-resolver/src/lib.rs", type: "AFFECTS" },
-    { source: "dec_uv_resolver_01", target: "charliermarsh", type: "AUTHORED_BY" },
-    { source: "dec_uv_resolver_01", target: "src_uv_pr120", type: "SOURCED_FROM" },
-    { source: "dec_uv_cache_02", target: "crates/uv-cache/src/lib.rs", type: "AFFECTS" },
-    { source: "dec_uv_cache_02", target: "konstin", type: "AUTHORED_BY" },
-    { source: "dec_pep582_01", target: "Lib/site.py", type: "AFFECTS" },
-    { source: "dec_pep582_01", target: "brettcannon", type: "AUTHORED_BY" },
-    { source: "dec_pep582_01", target: "src_pep582_disc", type: "SOURCED_FROM" }
+    { source: "dec_black_line_length_01", target: "src/black/linegen.py", type: "AFFECTS" },
+    { source: "dec_black_line_length_01", target: "ambv", type: "AUTHORED_BY" },
+    { source: "dec_black_line_length_01", target: "src_black_issue_1", type: "SOURCED_FROM" },
+    { source: "dec_black_strings_02", target: "src/black/strings.py", type: "AFFECTS" },
+    { source: "dec_black_strings_02", target: "ambv", type: "AUTHORED_BY" },
+    { source: "dec_black_strings_02", target: "src_black_issue_87", type: "SOURCED_FROM" },
+    { source: "dec_black_trailing_comma_03", target: "src/black/brackets.py", type: "AFFECTS" },
+    { source: "dec_black_trailing_comma_03", target: "zsol", type: "AUTHORED_BY" },
+    { source: "dec_black_revert_hex_04", target: "src/black/numerics.py", type: "AFFECTS" },
+    { source: "dec_black_revert_hex_04", target: "ambv", type: "AUTHORED_BY" },
+    { source: "dec_black_revert_hex_04", target: "src_black_pull_585", type: "SOURCED_FROM" },
+    { source: "dec_pep582_06", target: "Lib/site.py", type: "AFFECTS" },
+    { source: "dec_pep582_06", target: "brettcannon", type: "AUTHORED_BY" },
+    { source: "dec_pep582_06", target: "src_pep582", type: "SOURCED_FROM" },
+    { source: "dec_pep695_07", target: "Grammar/python.gram", type: "AFFECTS" },
+    { source: "dec_pep695_07", target: "gvanrossum", type: "AUTHORED_BY" }
   ]
 };
 
@@ -296,10 +439,10 @@ export const MOCK_EVAL_SUMMARY: EvalSummary = {
       matches: [
         {
           gt_item: "Use TypeAlias marker with runtime assignment instead of new keyword",
-          matched_pred_text: "Use typing.TypeAlias with runtime assignment",
-          matched_pred_reason: "Does not allow forward references cleanly and prevents lazy variance inference.",
+          matched_pred_text: "Reuse typing.TypeAlias with runtime assignment",
+          matched_pred_reason: "Does not allow forward references cleanly and causes circular import deadlocks.",
           similarity: 0.912,
-          judge_reason: "Identical rejected idea: reusing TypeAlias instead of the dedicated 'type' keyword."
+          judge_reason: "Identical rejected proposal: reusing TypeAlias instead of the dedicated 'type' keyword."
         }
       ]
     },

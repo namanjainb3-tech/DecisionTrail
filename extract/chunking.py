@@ -76,3 +76,4 @@ def chunk_document(
         flush_chunk(current_comments)
 
     return chunks
+

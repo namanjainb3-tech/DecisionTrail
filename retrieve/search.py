@@ -137,3 +137,4 @@ def search_candidates(
 
     scored_candidates.sort(key=lambda x: x["score"], reverse=True)
     return scored_candidates[:top_k]
+

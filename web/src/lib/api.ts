@@ -28,7 +28,7 @@ export async function fetchDecisions(params?: {
     if (params?.outcome) url.searchParams.append('outcome', params.outcome);
     if (params?.limit) url.searchParams.append('limit', params.limit.toString());
 
-    const res = await fetch(url.toString(), { signal: AbortSignal.timeout(2000) });
+    const res = await fetch(url.toString(), { signal: AbortSignal.timeout(8000) });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     return data.length > 0 ? data : MOCK_DECISIONS;
@@ -44,7 +44,7 @@ export async function fetchDecision(id: string): Promise<Decision | null> {
   }
 
   try {
-    const res = await fetch(`${API_BASE}/decisions/${id}`, { signal: AbortSignal.timeout(2000) });
+    const res = await fetch(`${API_BASE}/decisions/${id}`, { signal: AbortSignal.timeout(8000) });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.json();
   } catch (err) {
@@ -66,7 +66,7 @@ export async function fetchGraph(
     if (nodeId) url.searchParams.append('node_id', nodeId);
     url.searchParams.append('depth', depth.toString());
 
-    const res = await fetch(url.toString(), { signal: AbortSignal.timeout(2000) });
+    const res = await fetch(url.toString(), { signal: AbortSignal.timeout(8000) });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     if (data.nodes && data.nodes.length > 0) {
@@ -76,6 +76,41 @@ export async function fetchGraph(
   } catch (err) {
     console.warn('API /graph unavailable, using mock data:', err);
     return MOCK_GRAPH_DATA as any;
+  }
+}
+
+export async function fetchGraphStatus(): Promise<{
+  is_live: boolean;
+  engine: string;
+  uri: string;
+  instructions: string;
+  node_count?: number;
+  edge_count?: number;
+}> {
+  if (FORCE_MOCK) {
+    return {
+      is_live: false,
+      engine: 'Built-in High-Fidelity Graph Store (Offline Mode)',
+      uri: 'bolt://localhost:7687',
+      instructions: 'Running in standalone demo mode with in-memory graph engine.',
+      node_count: MOCK_GRAPH_DATA.nodes.length,
+      edge_count: MOCK_GRAPH_DATA.edges.length,
+    };
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/graph/status`, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } catch (err) {
+    return {
+      is_live: false,
+      engine: 'Built-in High-Fidelity Graph Store (Offline Mode)',
+      uri: 'bolt://localhost:7687',
+      instructions: 'Neo4j offline. Using built-in graph engine.',
+      node_count: MOCK_GRAPH_DATA.nodes.length,
+      edge_count: MOCK_GRAPH_DATA.edges.length,
+    };
   }
 }
 
@@ -98,7 +133,7 @@ export async function analyzePR(payload: {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(3000),
+      signal: AbortSignal.timeout(15000),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.json();
@@ -123,7 +158,7 @@ export async function submitFeedback(payload: {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(2000),
+      signal: AbortSignal.timeout(8000),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.json();
@@ -139,7 +174,7 @@ export async function fetchEvalResults(): Promise<EvalSummary> {
   }
 
   try {
-    const res = await fetch(`${API_BASE}/eval/results`, { signal: AbortSignal.timeout(2000) });
+    const res = await fetch(`${API_BASE}/eval/results`, { signal: AbortSignal.timeout(8000) });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     return data.peps_evaluated > 0 ? data : MOCK_EVAL_SUMMARY;
@@ -231,3 +266,4 @@ function mockAnalyzePR(payload: {
     comment_markdown: commentMarkdown,
   };
 }
+

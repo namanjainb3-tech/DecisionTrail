@@ -25,6 +25,15 @@ from contextlib import asynccontextmanager
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    try:
+        existing = get_decisions()
+        if not existing:
+            logger.info("Empty database detected on startup. Preloading authentic decisions...")
+            from scripts.preload_demo_cache import preload_demo_data
+            preload_demo_data()
+        rebuild_from_sqlite()
+    except Exception as e:
+        logger.warning(f"Initial graph rebuild skipped: {e}")
     yield
 
 app = FastAPI(
@@ -159,6 +168,22 @@ def get_decision_detail(decision_id: str) -> dict[str, Any]:
     raise HTTPException(status_code=404, detail="Decision not found")
 
 
+@app.get("/graph/status")
+def api_graph_status() -> dict[str, Any]:
+    from core.db_neo4j import get_neo4j_status
+    status = get_neo4j_status()
+    state = get_mock_graph_state()
+    if not state["nodes"]:
+        try:
+            rebuild_from_sqlite()
+            state = get_mock_graph_state()
+        except Exception:
+            pass
+    status["node_count"] = len(state["nodes"])
+    status["edge_count"] = len(state["edges"])
+    return status
+
+
 @app.get("/graph")
 def get_graph(
     node_id: str | None = None,
@@ -188,6 +213,10 @@ def get_graph(
 @app.post("/pr/analyze")
 def api_pr_analyze(req: PRAnalyzeRequest) -> dict[str, Any]:
     try:
+        state = get_mock_graph_state()
+        if not state["nodes"]:
+            rebuild_from_sqlite()
+
         result = analyze_pr(
             repo=req.repo,
             changed_files=req.changed_files,

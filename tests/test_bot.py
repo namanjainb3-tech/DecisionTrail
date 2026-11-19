@@ -68,3 +68,4 @@ def test_allowlist_blocks_unauthorized_posting(monkeypatch):
             post_to_github=True
         )
     assert "Security Violation" in str(exc_info.value)
+

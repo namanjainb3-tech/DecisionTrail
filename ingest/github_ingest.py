@@ -237,3 +237,4 @@ def ingest_github_repo(
         upsert_cursor("github", repo, max_updated_at, db_path=db_path)
 
     return documents
+

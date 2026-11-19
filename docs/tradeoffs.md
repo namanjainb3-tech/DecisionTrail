@@ -90,3 +90,4 @@ DecisionTrail treats LLM outputs as untrusted proposals subject to automated cry
 3. **Direct User Verification**:
    * Every rendered comment and UI card includes the exact quote, author handle, ISO timestamp, and a direct URL linking to the original discussion comment or forum post.
    * Maintainers never have to take the model's word for it; they can click directly to the human conversation that made the call.
+

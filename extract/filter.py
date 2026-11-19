@@ -65,3 +65,4 @@ def filter_chunks(
                 stats.passed_filter += 1
             passed.append(chunk)
     return passed
+

@@ -47,3 +47,4 @@ def rerank_candidates(
 
     reranked.sort(key=lambda x: x["score"], reverse=True)
     return reranked[:max_results]
+

@@ -65,3 +65,4 @@ export const ConfidenceBadge: React.FC<{ confidence?: number }> = ({ confidence 
     </span>
   );
 };
+

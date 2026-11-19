@@ -194,3 +194,4 @@ def test_discourse_ingest_offline_and_idempotency(tmp_path: Path):
 
     assert doc_count_2 == 1
     assert comm_count_2 == 3
+

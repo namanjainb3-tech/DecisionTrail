@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any
 from neo4j import GraphDatabase, Driver
 from core.config import settings
@@ -9,6 +10,10 @@ logger = logging.getLogger(__name__)
 
 _driver: Driver | None = None
 _neo4j_available: bool | None = None
+_last_error: str | None = None
+_last_check_timestamp: float = 0.0
+_has_logged_offline: bool = False
+RECHECK_INTERVAL_SEC: float = 60.0  # Cooldown between socket probe attempts
 
 
 def get_neo4j_driver(
@@ -26,27 +31,68 @@ def get_neo4j_driver(
 
 
 def close_neo4j_driver() -> None:
-    global _driver, _neo4j_available
+    global _driver, _neo4j_available, _last_error, _last_check_timestamp, _has_logged_offline
     if _driver is not None:
-        _driver.close()
+        try:
+            _driver.close()
+        except Exception:
+            pass
         _driver = None
     _neo4j_available = None
+    _last_error = None
+    _last_check_timestamp = 0.0
+    _has_logged_offline = False
 
 
-def check_neo4j_connection(driver: Driver | None = None) -> bool:
-    global _neo4j_available
-    if _neo4j_available is False:
-        return False
+def check_neo4j_connection(driver: Driver | None = None, force_recheck: bool = False) -> bool:
+    global _neo4j_available, _last_error, _last_check_timestamp, _has_logged_offline
+
+    now = time.time()
+    # If checked recently and not forcing a recheck, return cached status
+    if not force_recheck and _neo4j_available is not None:
+        if not _neo4j_available and (now - _last_check_timestamp) < RECHECK_INTERVAL_SEC:
+            return False
+        if _neo4j_available:
+            return True
+
+    _last_check_timestamp = now
     try:
         d = driver or get_neo4j_driver()
         with d.session() as session:
             result = session.run("RETURN 1 AS test")
-            _neo4j_available = result.single()["test"] == 1
+            record = result.single()
+            _neo4j_available = bool(record and record["test"] == 1)
+            if _neo4j_available:
+                _last_error = None
+                logger.info(f"Connected to Neo4j database at {settings.NEO4J_URI}")
             return _neo4j_available
     except Exception as e:
-        logger.warning(f"Neo4j connection check failed: {e}")
+        _last_error = str(e)
+        logger.debug(f"Neo4j connection check failed: {e}")
+        if not _has_logged_offline:
+            logger.info("Neo4j offline. Using built-in high-fidelity graph store.")
+            _has_logged_offline = True
         _neo4j_available = False
         return False
+
+
+def get_neo4j_status(driver: Driver | None = None, force: bool = False) -> dict[str, Any]:
+    """Returns detailed diagnostics of the Neo4j connection."""
+    is_live = check_neo4j_connection(driver=driver, force_recheck=force)
+    return {
+        "is_live": is_live,
+        "uri": settings.NEO4J_URI,
+        "engine": "Neo4j 5.x Graph Database" if is_live else "Built-in High-Fidelity Graph Store (Offline Fallback)",
+        "last_error": _last_error if not is_live else None,
+        "mode": "live_neo4j" if is_live else "in_memory_fallback",
+        "instructions": (
+            "Connected to live Neo4j instance."
+            if is_live
+            else "Neo4j offline. DecisionTrail is using its built-in in-memory graph store. "
+            "To connect real Neo4j, start Docker ('docker compose up -d') or point NEO4J_URI in .env "
+            "to a free Neo4j Aura cloud instance (https://console.neo4j.io)."
+        ),
+    }
 
 
 def init_neo4j_schema(driver: Driver | None = None) -> None:
@@ -78,14 +124,8 @@ def init_neo4j_schema(driver: Driver | None = None) -> None:
             FOR (p:Person) REQUIRE p.id IS UNIQUE;
             """
         )
-        session.run(
-            """
-            CREATE CONSTRAINT pr_id_unique IF NOT EXISTS
-            FOR (pr:PR) REQUIRE pr.pr_number IS UNIQUE;
-            """
-        )
 
-        # 384-dimensional cosine vector index on Decision.embedding
+        # Vector index for decision semantic similarity
         session.run(
             """
             CREATE VECTOR INDEX decision_embedding_idx IF NOT EXISTS
@@ -96,5 +136,3 @@ def init_neo4j_schema(driver: Driver | None = None) -> None:
             }};
             """
         )
-        logger.info("Neo4j constraints and vector index initialized successfully.")
-

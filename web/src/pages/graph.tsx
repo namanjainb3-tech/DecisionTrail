@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { fetchGraph } from '../lib/api';
+import { fetchGraph, fetchGraphStatus } from '../lib/api';
 import { GraphNode, GraphEdge } from '../lib/mockData';
 import { OutcomeBadge } from '../components/SourceBadge';
 
@@ -19,6 +19,7 @@ export default function GraphPage() {
   const [filterType, setFilterType] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
+  const [graphStatus, setGraphStatus] = useState<any>(null);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const simNodesRef = useRef<SimulationNode[]>([]);
@@ -29,9 +30,13 @@ export default function GraphPage() {
   const loadGraphData = async (centerId?: string) => {
     setLoading(true);
     try {
-      const data = await fetchGraph(centerId);
+      const [data, status] = await Promise.all([
+        fetchGraph(centerId),
+        fetchGraphStatus(),
+      ]);
       setNodes(data.nodes);
       setEdges(data.edges);
+      setGraphStatus(status);
       initSimulation(data.nodes, data.edges);
       if (data.nodes.length > 0 && !selectedNode) {
         setSelectedNode(data.nodes[0]);
@@ -270,6 +275,31 @@ export default function GraphPage() {
         </div>
       </div>
 
+      {/* Graph Engine Status Bar */}
+      {graphStatus && (
+        <div className="rounded-lg border border-gray-800 bg-[#0d1322] px-4 py-2.5 text-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <div className="flex items-center space-x-2">
+            <span
+              className={`h-2.5 w-2.5 rounded-full ${
+                graphStatus.is_live ? 'bg-emerald-400 animate-pulse' : 'bg-blue-400'
+              }`}
+            ></span>
+            <span className="font-semibold text-gray-200">
+              Backend: {graphStatus.engine}
+            </span>
+            <span className="text-gray-500">•</span>
+            <span className="text-gray-400 font-mono">
+              {nodes.length} nodes, {edges.length} edges
+            </span>
+          </div>
+          <span className="text-[11px] text-gray-400">
+            {graphStatus.is_live
+              ? 'Bolt protocol active at ' + graphStatus.uri
+              : 'Neo4j offline; in-memory store mirroring Cypher traversal'}
+          </span>
+        </div>
+      )}
+
       {/* Canvas and Side Panel */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-8 rounded-xl border border-gray-800 bg-[#0e1424] p-2 relative overflow-hidden h-[540px]">
@@ -371,3 +401,4 @@ export default function GraphPage() {
     </div>
   );
 }
+

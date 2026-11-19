@@ -216,3 +216,4 @@ def ingest_discourse_topic(
         upsert_cursor("discourse", topic_id, max_updated_at, db_path=db_path)
 
     return doc
+

@@ -3,10 +3,10 @@ import { analyzePR } from '../lib/api';
 import { FeedbackWidget } from '../components/FeedbackWidget';
 
 export default function PRSimulatorPage() {
-  const [repo, setRepo] = useState('astral-sh/uv');
-  const [changedFiles, setChangedFiles] = useState('crates/uv-resolver/src/lib.rs\ncrates/uv-resolver/src/pubgrub.rs');
-  const [prTitle, setPrTitle] = useState('Refactor resolver to use external SAT solver wrapper');
-  const [diffSummary, setDiffSummary] = useState('Replaces custom PubGrub engine with libsolv bindings for dependency tree traversal.');
+  const [repo, setRepo] = useState('psf/black');
+  const [changedFiles, setChangedFiles] = useState('src/black/linegen.py\nsrc/black/__init__.py');
+  const [prTitle, setPrTitle] = useState('Change default line length to 79 characters for strict PEP 8 compliance');
+  const [diffSummary, setDiffSummary] = useState('Replaces 88-character limit with 79 characters to align with PEP 8 standards.');
   
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{
@@ -28,7 +28,7 @@ export default function PRSimulatorPage() {
         changed_files: files,
         pr_title: prTitle,
         pr_diff_summary: diffSummary,
-        threshold: 0.35,
+        threshold: 0.25,
       });
       setResult(resp);
     } catch (err) {
@@ -39,16 +39,21 @@ export default function PRSimulatorPage() {
   };
 
   const applyPreset = (presetName: string) => {
-    if (presetName === 'uv-resolver') {
-      setRepo('astral-sh/uv');
-      setChangedFiles('crates/uv-resolver/src/lib.rs\ncrates/uv-resolver/src/pubgrub.rs');
-      setPrTitle('Attempting to use external SAT solver bindings');
-      setDiffSummary('Proposing libsolv integration instead of native Rust PubGrub implementation.');
-    } else if (presetName === 'uv-cache') {
-      setRepo('astral-sh/uv');
-      setChangedFiles('crates/uv-cache/src/lib.rs\ncrates/uv-installer/src/site_packages.rs');
-      setPrTitle('Switch to symlinks on Windows site-packages');
-      setDiffSummary('Use symlink instead of hardlinking wheels to save space.');
+    if (presetName === 'black-line-length') {
+      setRepo('psf/black');
+      setChangedFiles('src/black/linegen.py\nsrc/black/__init__.py');
+      setPrTitle('Change default line length to 79 characters for strict PEP 8 compliance');
+      setDiffSummary('Replaces 88-character limit with 79 characters to align with PEP 8 standards.');
+    } else if (presetName === 'black-quotes') {
+      setRepo('psf/black');
+      setChangedFiles('src/black/strings.py\nsrc/black/trans.py');
+      setPrTitle('Add option to prefer single quotes for strings');
+      setDiffSummary('Preserves author-authored single quotes instead of normalizing to double quotes.');
+    } else if (presetName === 'black-hex-revert') {
+      setRepo('psf/black');
+      setChangedFiles('src/black/numerics.py\nsrc/black/__init__.py');
+      setPrTitle('Uppercase hexadecimal numeric literals 0xff -> 0xFF');
+      setDiffSummary('Automatically normalizes hex literals to uppercase.');
     } else if (presetName === 'cpython-pep582') {
       setRepo('python/cpython');
       setChangedFiles('Lib/site.py');
@@ -85,21 +90,35 @@ export default function PRSimulatorPage() {
               <h2 className="text-sm font-bold uppercase tracking-wider text-gray-400">
                 PR Simulation Inputs
               </h2>
-              <div className="flex items-center space-x-1 text-xs">
-                <span className="text-gray-500">Presets:</span>
+              <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                <span className="text-gray-500 text-[11px]">Presets:</span>
                 <button
                   type="button"
-                  onClick={() => applyPreset('uv-resolver')}
-                  className="rounded bg-gray-800 px-2 py-0.5 text-blue-400 hover:bg-gray-700 font-mono"
+                  onClick={() => applyPreset('black-line-length')}
+                  className="rounded bg-gray-800 px-2 py-0.5 text-blue-400 hover:bg-gray-700 font-mono text-[11px]"
                 >
-                  uv-resolver
+                  line-length (88 vs 79)
                 </button>
                 <button
                   type="button"
-                  onClick={() => applyPreset('uv-cache')}
-                  className="rounded bg-gray-800 px-2 py-0.5 text-blue-400 hover:bg-gray-700 font-mono"
+                  onClick={() => applyPreset('black-quotes')}
+                  className="rounded bg-gray-800 px-2 py-0.5 text-blue-400 hover:bg-gray-700 font-mono text-[11px]"
                 >
-                  uv-cache
+                  quote-normalization
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyPreset('black-hex-revert')}
+                  className="rounded bg-gray-800 px-2 py-0.5 text-amber-400 hover:bg-gray-700 font-mono text-[11px]"
+                >
+                  hex-revert (PR #585)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyPreset('cpython-pep582')}
+                  className="rounded bg-gray-800 px-2 py-0.5 text-purple-400 hover:bg-gray-700 font-mono text-[11px]"
+                >
+                  pep-582
                 </button>
               </div>
             </div>
@@ -228,3 +247,4 @@ export default function PRSimulatorPage() {
     </div>
   );
 }
+

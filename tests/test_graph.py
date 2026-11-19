@@ -110,3 +110,4 @@ def test_rebuild_from_sqlite(tmp_path: Path):
     d = get_decision("dec_line_length_004")
     assert d is not None
     assert d["title"] == "Default line length 88 characters"
+

@@ -38,3 +38,4 @@ jobs:
           check_repo_allowlist(repo)
           print(f'Running DecisionTrail on authorized test fork: {repo}')
           "
+

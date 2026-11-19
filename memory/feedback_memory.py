@@ -177,3 +177,4 @@ class Mem0FeedbackMemory(FeedbackMemory):
 
 def get_feedback_memory(db_path: Path | str | None = None) -> FeedbackMemory:
     return Mem0FeedbackMemory(db_path=db_path)
+

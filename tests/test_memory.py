@@ -92,3 +92,4 @@ def test_outdated_feedback_suppresses_decision(tmp_path: Path):
     )
     returned_ids = [d["id"] for d in res["decisions"]]
     assert "dec_pathlib_001" not in returned_ids
+

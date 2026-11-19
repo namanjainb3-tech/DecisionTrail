@@ -65,6 +65,7 @@ def test_api_routes_registered():
         "/decisions",
         "/decisions/{decision_id}",
         "/graph",
+        "/graph/status",
         "/pr/analyze",
         "/feedback",
         "/eval/run",
@@ -135,3 +136,12 @@ def test_api_eval_results_endpoint():
     res = api_eval_results()
     assert "overall_recall" in res
     assert "results" in res
+
+
+def test_api_graph_status_endpoint():
+    from api.main import api_graph_status
+    status = api_graph_status()
+    assert "is_live" in status
+    assert "engine" in status
+    assert "node_count" in status
+

@@ -144,3 +144,4 @@ where weights are $w_{\text{graph}} = 1.0$, $w_{\text{vector}} = 0.8$, $w_{\text
    * `outdated`: Suppressed entirely with warning annotation.
 
 Only decisions scoring above threshold $\tau = 0.35$ are formatted into the GitHub PR comment, capped at a maximum of 3 decisions to eliminate developer noise.
+

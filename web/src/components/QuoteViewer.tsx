@@ -52,3 +52,4 @@ export const QuoteViewer: React.FC<QuoteViewerProps> = ({ evidence, label = 'Ver
     </div>
   );
 };
+

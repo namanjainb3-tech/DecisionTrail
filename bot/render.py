@@ -85,3 +85,4 @@ def render_bot_comment(top_decisions: list[dict[str, Any]]) -> str:
         "<sub>🤖 *Generated from public discussions. Verify against the linked sources.*</sub>"
     )
     return "\n".join(blocks).strip()
+
