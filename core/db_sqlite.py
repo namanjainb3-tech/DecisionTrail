@@ -329,100 +329,45 @@ def get_discussion_detail(
 
 def get_repositories(db_path: Path | str | None = None) -> list[str]:
     conn = get_db(db_path)
+    repos: set[str] = set()
+
+    # 1. Repositories with decisions
     cursor = conn.execute(
-        "SELECT DISTINCT repo_or_forum FROM decisions WHERE repo_or_forum IS NOT NULL AND repo_or_forum != '' ORDER BY repo_or_forum;"
+        "SELECT DISTINCT repo_or_forum FROM decisions WHERE repo_or_forum IS NOT NULL AND repo_or_forum != ''"
     )
-    rows = cursor.fetchall()
-    conn.close()
-    return [r[0] for r in rows if r[0]]
-    return result
+    for r in cursor.fetchall():
+        if r[0]:
+            repos.add(r[0].strip())
 
-
-def get_cursor(source_type: str, source_id: str, db_path: Path | str | None = None) -> str | None:
-    conn = get_db(db_path)
-    cursor = conn.execute(
-        "SELECT last_updated_at FROM ingest_cursors WHERE source_type = ? AND source_id = ?",
-        (source_type, source_id),
-    )
-    row = cursor.fetchone()
-    conn.close()
-    return row["last_updated_at"] if row else None
-
-
-def upsert_cursor(
-    source_type: str, source_id: str, last_updated_at: str, db_path: Path | str | None = None
-) -> None:
-    conn = get_db(db_path)
-    with conn:
-        conn.execute(
-            """
-            INSERT INTO ingest_cursors (source_type, source_id, last_updated_at)
-            VALUES (?, ?, ?)
-            ON CONFLICT(source_type, source_id) DO UPDATE SET
-                last_updated_at = excluded.last_updated_at;
-            """,
-            (source_type, source_id, last_updated_at),
-        )
-    conn.close()
-
-
-def search_comments_bm25(
-    query: str, limit: int = 10, db_path: Path | str | None = None
-) -> list[dict[str, Any]]:
-    conn = get_db(db_path)
-    # Sanitize query for FTS5
-    safe_query = '"' + query.replace('"', '""') + '"'
-    sql = """
-        SELECT c.*, bm25(comments_fts) as rank
-        FROM comments_fts
-        JOIN comments c ON comments_fts.comment_id = c.comment_id
-        WHERE comments_fts MATCH ?
-        ORDER BY rank
-        LIMIT ?;
-    """
+    # 2. Repositories with ingested cursors
     try:
-        cursor = conn.execute(sql, (safe_query, limit))
-        rows = cursor.fetchall()
-        return [dict(r) for r in rows]
+        cursor = conn.execute(
+            "SELECT DISTINCT source_id FROM ingest_cursors WHERE source_type = 'github' AND source_id IS NOT NULL AND source_id != ''"
+        )
+        for r in cursor.fetchall():
+            if r[0]:
+                repos.add(r[0].strip())
     except Exception:
-        # Fallback to simple LIKE if FTS expression has syntax issue
-        fallback_sql = """
-            SELECT *, 0.0 as rank
-            FROM comments
-            WHERE body LIKE ?
-            LIMIT ?;
-        """
-        cursor = conn.execute(fallback_sql, (f"%{query}%", limit))
-        rows = cursor.fetchall()
-        return [dict(r) for r in rows]
-    finally:
-        conn.close()
+        pass
 
+    # 3. Repositories from documents thread_id
+    try:
+        cursor = conn.execute(
+            "SELECT DISTINCT thread_id FROM documents WHERE thread_id LIKE 'github_%'"
+        )
+        for r in cursor.fetchall():
+            if r[0]:
+                raw = r[0].removeprefix("github_")
+                if "_" in raw:
+                    repo_name = raw.rsplit("_", 1)[0]
+                    if repo_name:
+                        repos.add(repo_name.strip())
+    except Exception:
+        pass
 
-def get_documents(
-    thread_ids: list[str] | None = None,
-    limit: int = 100,
-    db_path: Path | str | None = None,
-) -> list[Document]:
-    conn = get_db(db_path)
-    if thread_ids:
-        placeholders = ",".join("?" for _ in thread_ids)
-        sql = f"SELECT raw_json FROM documents WHERE thread_id IN ({placeholders}) LIMIT ?"
-        params = list(thread_ids) + [limit]
-    else:
-        sql = "SELECT raw_json FROM documents LIMIT ?"
-        params = [limit]
-
-    cursor = conn.execute(sql, params)
-    rows = cursor.fetchall()
     conn.close()
-
-    documents: list[Document] = []
-    for r in rows:
-        try:
-            documents.append(Document.model_validate_json(r["raw_json"]))
-        except Exception:
-            continue
-    return documents
+    return sorted(list(repos))
 
 
+
+# Repository deletion cascade logic to be added in next commit
