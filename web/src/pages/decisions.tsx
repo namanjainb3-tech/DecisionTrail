@@ -433,6 +433,121 @@ export default function DecisionsPage() {
         </div>
       )}
 
+      {/* Sub-View Switcher Tabs: Decisions vs Discussions */}
+      <div className="flex items-center justify-between border-b border-[#1a2233] pb-2">
+        <div className="flex space-x-3">
+          <button
+            onClick={() => setViewMode('decisions')}
+            className={`flex items-center space-x-2 pb-2 px-1 text-xs sm:text-sm font-semibold transition border-b-2 ${
+              viewMode === 'decisions'
+                ? 'border-sky-500 text-sky-400'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <span>Architectural Decisions</span>
+            <span className="rounded-full bg-[#101726] border border-[#1e2a3f] px-2 py-0.5 text-[10px] font-mono text-slate-300">
+              {currentDecisions.length}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setViewMode('discussions')}
+            className={`flex items-center space-x-2 pb-2 px-1 text-xs sm:text-sm font-semibold transition border-b-2 ${
+              viewMode === 'discussions'
+                ? 'border-sky-500 text-sky-400'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <span>Discussion Threads</span>
+            <span className="rounded-full bg-[#101726] border border-[#1e2a3f] px-2 py-0.5 text-[10px] font-mono text-slate-300">
+              {filteredDiscussions.length}
+            </span>
+          </button>
+        </div>
+
+        <span className="hidden sm:inline-block text-[11px] text-slate-500 font-mono">
+          {sectionMode === 'main' ? `Active: ${currentRepo || 'All'}` : `Viewing Archived Repositories`}
+        </span>
+      </div>
+
+      {/* Universal Search and Filter Bar */}
+      <form onSubmit={handleSearch} className="grid grid-cols-1 md:grid-cols-12 gap-2.5 bg-[#0a0e17] p-3 rounded-xl border border-[#1a2336]">
+        <div className={viewMode === 'decisions' ? "md:col-span-6" : "md:col-span-9"}>
+          <div className="relative">
+            <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-slate-500">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </span>
+            <input
+              type="text"
+              placeholder={
+                viewMode === 'decisions'
+                  ? "Search decisions by PR #, keyword, rationale, or paste PR link..."
+                  : "Search discussions by PR #, title keyword, or paste PR link..."
+              }
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full rounded-lg bg-[#07090f] border border-[#1c273c] pl-8 pr-3 py-2 text-xs sm:text-sm text-slate-100 placeholder-slate-500 focus:border-sky-500 focus:outline-none"
+            />
+          </div>
+        </div>
+
+        {viewMode === 'decisions' ? (
+          <>
+            <div className="md:col-span-3">
+              <select
+                value={selectedOutcome}
+                onChange={(e) => setSelectedOutcome(e.target.value)}
+                className="w-full rounded-lg bg-[#07090f] border border-[#1c273c] px-3 py-2 text-xs sm:text-sm text-slate-200 focus:border-sky-500 focus:outline-none"
+              >
+                <option value="">All Outcomes</option>
+                <option value="adopted">Adopted</option>
+                <option value="rejected">Rejected</option>
+                <option value="reverted">Reverted</option>
+                <option value="deferred">Deferred</option>
+              </select>
+            </div>
+            <div className="md:col-span-3 flex space-x-2">
+              <input
+                type="text"
+                placeholder="Filter by file path..."
+                value={selectedPath}
+                onChange={(e) => setSelectedPath(e.target.value)}
+                className="w-full rounded-lg bg-[#07090f] border border-[#1c273c] px-3 py-2 text-xs sm:text-sm text-slate-100 placeholder-slate-500 focus:border-sky-500 focus:outline-none"
+              />
+              <button
+                type="submit"
+                className="rounded-lg bg-sky-600 px-3.5 py-2 text-xs font-semibold text-white hover:bg-sky-500 transition shrink-0"
+              >
+                Filter
+              </button>
+            </div>
+          </>
+        ) : (
+          <div className="md:col-span-3 flex space-x-2">
+            <button
+              type="submit"
+              className="flex-1 rounded-lg bg-sky-600 px-4 py-2 text-xs font-semibold text-white hover:bg-sky-500 transition"
+            >
+              Search
+            </button>
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery('');
+                  loadData('');
+                }}
+                className="rounded-lg bg-[#121927] border border-[#1c273c] px-3 py-2 text-xs font-medium text-slate-300 hover:bg-[#182338] transition"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        )}
+      </form>
+
           </div>
   );
 }
