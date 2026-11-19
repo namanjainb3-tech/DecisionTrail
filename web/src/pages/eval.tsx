@@ -15,7 +15,7 @@ export default function EvalPage() {
       const data = await fetchEvalResults();
       setSummary(data);
     } catch (err) {
-      console.error(err);
+      console.warn('Failed to load eval results:', err);
     } finally {
       setLoading(false);
     }
@@ -28,10 +28,10 @@ export default function EvalPage() {
       const freshSummary = await runEvaluation();
       setSummary(freshSummary);
       setRunMessage(
-        `✓ Live benchmark executed successfully at ${new Date().toLocaleTimeString()}! Overall Recall: ${(freshSummary.overall_recall * 100).toFixed(1)}% across ${freshSummary.peps_evaluated} PEP discussions.`
+        `Live benchmark executed successfully at ${new Date().toLocaleTimeString()}! Overall Recall: ${(freshSummary.overall_recall * 100).toFixed(1)}% across ${freshSummary.peps_evaluated} PEP discussions.`
       );
     } catch (err: any) {
-      console.error(err);
+      console.warn('Benchmark execution error:', err);
       setRunMessage(`Benchmark execution failed: ${err.message || 'Run failed'}`);
     } finally {
       setRunningBenchmark(false);
@@ -45,29 +45,32 @@ export default function EvalPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-gray-800 pb-5">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-[#1a2233] pb-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-white flex items-center space-x-2">
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white flex items-center space-x-2">
             <span>Blind PEP Benchmark Evaluation</span>
           </h1>
-          <p className="mt-1 text-sm text-gray-400">
-            Measuring recall of PEP "Rejected Ideas" recovered strictly from public Discourse discussions without exposing PEP text.
+          <p className="mt-1 text-xs sm:text-sm text-slate-400">
+            Measuring recall of PEP "Rejected Ideas" recovered strictly from public Discourse discussions without exposing PEP specification text.
           </p>
         </div>
         <div className="flex items-center space-x-2 shrink-0">
           <button
             onClick={handleRunLiveBenchmark}
             disabled={runningBenchmark}
-            className="rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 px-4 py-2 text-xs font-bold text-white shadow-lg shadow-emerald-950/50 transition disabled:opacity-50 flex items-center space-x-2"
+            className="rounded-lg bg-emerald-600 hover:bg-emerald-500 px-4 py-2 text-xs font-semibold text-white shadow-sm transition disabled:opacity-50 flex items-center space-x-2"
           >
             {runningBenchmark ? (
               <>
                 <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-solid border-white border-r-transparent"></div>
-                <span>Evaluating Dense Embeddings...</span>
+                <span>Evaluating Dense Vectors...</span>
               </>
             ) : (
               <>
-                <span>🚀</span>
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
                 <span>Run Live Benchmark</span>
               </>
             )}
@@ -75,18 +78,18 @@ export default function EvalPage() {
           <button
             onClick={loadData}
             disabled={runningBenchmark}
-            className="rounded-lg bg-gray-800 px-3.5 py-2 text-xs font-semibold text-gray-200 hover:bg-gray-700 transition"
+            className="rounded-lg bg-[#101726] border border-[#1e2a3f] px-3.5 py-2 text-xs font-medium text-slate-300 hover:bg-[#151f33] transition"
           >
-            ↻ Refresh
+            Refresh
           </button>
         </div>
       </div>
 
       {/* Live Benchmark Execution Notification */}
       {runMessage && (
-        <div className="rounded-xl border border-emerald-800/80 bg-emerald-950/40 p-3.5 text-xs text-emerald-200 flex items-center justify-between">
+        <div className="rounded-xl border border-emerald-800/60 bg-emerald-950/30 p-3.5 text-xs text-emerald-200 flex items-center justify-between">
           <div className="flex items-center space-x-2">
-            <span className="text-emerald-400 font-bold">⚡ Live Update:</span>
+            <span className="text-emerald-400 font-mono font-semibold">Live Benchmark Result:</span>
             <span>{runMessage}</span>
           </div>
           <button
@@ -99,15 +102,19 @@ export default function EvalPage() {
       )}
 
       {/* Blindness Invariant Guarantee Banner */}
-      <div className="rounded-xl border border-blue-900/60 bg-blue-950/30 p-4 text-xs text-blue-200 flex items-start space-x-3">
-        <span className="text-xl shrink-0">🔒</span>
+      <div className="rounded-xl border border-[#1b273d] bg-[#090e18] p-4 text-xs text-slate-300 flex items-start space-x-3">
+        <div className="p-1.5 rounded-md bg-[#101726] border border-[#1d2940] text-sky-400 shrink-0 mt-0.5">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+          </svg>
+        </div>
         <div>
-          <span className="font-bold text-blue-100">Blindness Invariant Guarantee:</span>{' '}
-          The evaluation store strictly verifies that <code>SELECT count(*) FROM documents WHERE platform = 'pep'</code> is 0.
-          DecisionTrail has zero access to the actual PEP specification documents. All recovered ideas were synthesized
-          solely from public discussion threads!
+          <div className="font-semibold text-white mb-0.5">Strict Blindness Invariant Guarantee</div>
+          <p className="text-[11px] text-slate-300 leading-relaxed">
+            The benchmark store cryptographically enforces that <code className="text-sky-300 font-mono">SELECT count(*) FROM documents WHERE platform = 'pep'</code> is 0. DecisionTrail has zero access to actual PEP specification documents. All recovered alternatives are extracted exclusively from public community discussions.
+          </p>
           {summary?.results?.[0]?.run_at && (
-            <div className="mt-1 text-[11px] text-blue-300/80 font-mono">
+            <div className="mt-1.5 text-[10px] text-slate-500 font-mono">
               Last Verified Benchmark Run: {new Date(summary.results[0].run_at).toLocaleString()}
             </div>
           )}
@@ -116,48 +123,53 @@ export default function EvalPage() {
 
       {/* Summary KPI Cards */}
       {summary && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <div className="rounded-xl border border-gray-800 bg-[#0e1424] p-4 text-center">
-            <div className="text-xs font-medium text-gray-400 uppercase tracking-wider">Overall Recall</div>
-            <div className="mt-2 text-3xl font-extrabold text-emerald-400 font-mono">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
+          <div className="rounded-xl border border-[#1a2336] bg-[#0a0e17] p-4 text-center">
+            <div className="text-[11px] font-mono uppercase tracking-wider text-slate-400">Overall Recall</div>
+            <div className="mt-1.5 text-2xl sm:text-3xl font-bold text-emerald-400 font-mono">
               {(summary.overall_recall * 100).toFixed(1)}%
             </div>
-            <div className="mt-1 text-[11px] text-emerald-500/80 font-medium">✓ Exceeds 50% target</div>
+            <div className="mt-1 text-[10px] text-emerald-500 font-mono">Exceeds 50% target</div>
           </div>
 
-          <div className="rounded-xl border border-gray-800 bg-[#0e1424] p-4 text-center">
-            <div className="text-xs font-medium text-gray-400 uppercase tracking-wider">Precision (Lower Bound)</div>
-            <div className="mt-2 text-3xl font-extrabold text-blue-400 font-mono">
+          <div className="rounded-xl border border-[#1a2336] bg-[#0a0e17] p-4 text-center">
+            <div className="text-[11px] font-mono uppercase tracking-wider text-slate-400">Precision (Lower Bound)</div>
+            <div className="mt-1.5 text-2xl sm:text-3xl font-bold text-sky-400 font-mono">
               {(summary.overall_precision_lb * 100).toFixed(1)}%
             </div>
-            <div className="mt-1 text-[11px] text-gray-500">Conservative lower bound</div>
+            <div className="mt-1 text-[10px] text-slate-500 font-mono">Conservative lower bound</div>
           </div>
 
-          <div className="rounded-xl border border-gray-800 bg-[#0e1424] p-4 text-center">
-            <div className="text-xs font-medium text-gray-400 uppercase tracking-wider">Ground Truth Ideas</div>
-            <div className="mt-2 text-3xl font-extrabold text-white font-mono">
+          <div className="rounded-xl border border-[#1a2336] bg-[#0a0e17] p-4 text-center">
+            <div className="text-[11px] font-mono uppercase tracking-wider text-slate-400">Ground Truth Ideas</div>
+            <div className="mt-1.5 text-2xl sm:text-3xl font-bold text-white font-mono">
               {summary.total_ground_truth}
             </div>
-            <div className="mt-1 text-[11px] text-gray-500">From official PEP texts</div>
+            <div className="mt-1 text-[10px] text-slate-500 font-mono">From official PEP texts</div>
           </div>
 
-          <div className="rounded-xl border border-gray-800 bg-[#0e1424] p-4 text-center">
-            <div className="text-xs font-medium text-gray-400 uppercase tracking-wider">Ideas Recovered</div>
-            <div className="mt-2 text-3xl font-extrabold text-emerald-400 font-mono">
+          <div className="rounded-xl border border-[#1a2336] bg-[#0a0e17] p-4 text-center">
+            <div className="text-[11px] font-mono uppercase tracking-wider text-slate-400">Ideas Recovered</div>
+            <div className="mt-1.5 text-2xl sm:text-3xl font-bold text-emerald-400 font-mono">
               {summary.total_recovered}
             </div>
-            <div className="mt-1 text-[11px] text-gray-500">Across {summary.peps_evaluated} PEP discussions</div>
+            <div className="mt-1 text-[10px] text-slate-500 font-mono">Across {summary.peps_evaluated} PEP discussions</div>
           </div>
         </div>
       )}
 
       {/* Per-PEP Benchmark Breakdown */}
-      <div className="space-y-4">
-        <h2 className="text-base font-bold text-white">Per-PEP Recall Breakdown</h2>
+      <div className="space-y-3.5">
+        <h2 className="text-sm font-mono font-semibold uppercase tracking-wider text-slate-400">
+          Per-PEP Recall Evaluation
+        </h2>
 
         {loading ? (
-          <div className="flex h-36 items-center justify-center rounded-xl border border-gray-800 bg-[#0e1424]">
-            <span className="text-xs text-gray-400">Loading benchmark results...</span>
+          <div className="flex h-36 items-center justify-center rounded-xl border border-[#1a2336] bg-[#0a0e17]">
+            <div className="flex items-center space-x-2 text-xs text-slate-400">
+              <div className="w-3.5 h-3.5 animate-spin rounded-full border-2 border-sky-500 border-r-transparent"></div>
+              <span>Loading benchmark evaluation...</span>
+            </div>
           </div>
         ) : summary?.results ? (
           summary.results.map((item) => {
@@ -167,77 +179,84 @@ export default function EvalPage() {
             return (
               <div
                 key={item.pep_number}
-                className="rounded-xl border border-gray-800 bg-[#0e1424] overflow-hidden"
+                className="rounded-xl border border-[#1a2336] bg-[#0a0e17] overflow-hidden"
               >
                 <div
                   onClick={() => setExpandedPep(isExpanded ? null : item.pep_number)}
-                  className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer hover:bg-gray-850/50 transition"
+                  className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer hover:bg-[#0d121e] transition-colors duration-150"
                 >
                   <div className="space-y-1">
                     <div className="flex items-center space-x-2">
-                      <span className="rounded bg-blue-900/60 border border-blue-700/60 px-2 py-0.5 text-xs font-mono font-bold text-blue-300">
+                      <span className="rounded bg-[#101726] border border-[#1e2a3f] px-2 py-0.5 text-xs font-mono font-bold text-sky-400">
                         PEP {item.pep_number}
                       </span>
-                      <span className="font-semibold text-white text-sm">
+                      <span className="font-semibold text-white text-xs sm:text-sm">
                         {item.title}
                       </span>
                     </div>
-                    <div className="text-xs text-gray-400">
+                    <div className="text-[11px] text-slate-400 font-mono">
                       Recovered {item.matched_count} of {item.ground_truth_count} ground-truth ideas • {item.predicted_count} total alternatives extracted
                     </div>
                   </div>
 
                   <div className="flex items-center space-x-4 shrink-0">
-                    <div className="w-32 bg-gray-800 rounded-full h-2.5 overflow-hidden">
+                    <div className="w-28 sm:w-36 bg-[#080b11] rounded-full h-2 overflow-hidden border border-[#1a2336]">
                       <div
-                        className={`h-2.5 rounded-full ${
+                        className={`h-full rounded-full ${
                           recallPct >= 50 ? 'bg-emerald-500' : 'bg-amber-500'
                         }`}
                         style={{ width: `${recallPct}%` }}
                       ></div>
                     </div>
-                    <span className="font-mono text-sm font-bold text-white w-12 text-right">
+                    <span className="font-mono text-xs sm:text-sm font-bold text-white w-12 text-right">
                       {recallPct}%
                     </span>
-                    <span className="text-gray-500 text-xs">{isExpanded ? '▲' : '▼'}</span>
+                    <svg
+                      className={`w-4 h-4 text-slate-500 transform transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
                   </div>
                 </div>
 
                 {isExpanded && item.matches && (
-                  <div className="p-4 border-t border-gray-800/80 bg-[#090d18] space-y-3">
-                    <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                      Ground Truth vs Extracted Discussion Matches
+                  <div className="p-4 border-t border-[#161f30] bg-[#07090f] space-y-3">
+                    <h4 className="text-[11px] font-mono font-semibold text-slate-400 uppercase tracking-wider">
+                      Ground Truth vs Recovered Discussion Matches
                     </h4>
                     {item.matches.length === 0 ? (
-                      <p className="text-xs text-gray-500">No matching alternatives detected for this PEP.</p>
+                      <p className="text-xs text-slate-500">No matching alternatives detected for this PEP.</p>
                     ) : (
                       item.matches.map((m, idx) => (
                         <div
                           key={idx}
-                          className="rounded-lg border border-gray-800 bg-[#0f172a] p-3 text-xs space-y-2"
+                          className="rounded-lg border border-[#1a2336] bg-[#0a0e17] p-3 text-xs space-y-2"
                         >
                           <div className="flex items-center justify-between">
-                            <span className="font-semibold text-amber-400">
-                              Ground Truth Rejected Idea:
+                            <span className="font-semibold text-amber-400 font-mono text-[11px]">
+                              Ground Truth Rejected Idea (from PEP text):
                             </span>
-                            <span className="font-mono text-[11px] text-blue-400 bg-blue-950 px-2 py-0.5 rounded border border-blue-900">
-                              Cosine Sim: {(m.similarity * 100).toFixed(1)}%
+                            <span className="font-mono text-[10px] text-sky-400 bg-[#0d1524] px-2 py-0.5 rounded border border-[#1d2a45]">
+                              Cosine Similarity: {(m.similarity * 100).toFixed(1)}%
                             </span>
                           </div>
-                          <p className="text-gray-200 italic font-mono bg-gray-900/80 p-2 rounded border border-gray-800">
+                          <p className="text-slate-200 font-mono text-[11px] bg-[#07090f] p-2.5 rounded border border-[#161f30] leading-relaxed">
                             "{m.gt_item}"
                           </p>
 
                           <div className="pt-1">
-                            <span className="font-semibold text-emerald-400">
-                              DecisionTrail Recovered Alternative:
+                            <span className="font-semibold text-emerald-400 font-mono text-[11px]">
+                              DecisionTrail Recovered Alternative (from Discourse):
                             </span>
-                            <p className="text-gray-200 mt-0.5">{m.matched_pred_text}</p>
-                            <p className="text-gray-400 mt-0.5"><span className="text-gray-500">Extracted Reason: </span>{m.matched_pred_reason}</p>
+                            <p className="text-slate-200 mt-1 text-xs">{m.matched_pred_text}</p>
+                            <p className="text-slate-400 mt-0.5 text-[11px]"><span className="text-slate-500">Extracted Reason: </span>{m.matched_pred_reason}</p>
                           </div>
 
-                          <div className="pt-1 border-t border-gray-800 text-[11px] text-gray-400">
-                            <span className="text-gray-500 font-medium">LLM Judge Validation: </span>
+                          <div className="pt-1.5 border-t border-[#161f30] text-[11px] text-slate-400">
+                            <span className="text-slate-500 font-mono">Semantic Alignment Rationale: </span>
                             {m.judge_reason}
                           </div>
                         </div>
@@ -252,5 +271,6 @@ export default function EvalPage() {
       </div>
     </div>
   );
+}    </div>
+  );
 }
-
