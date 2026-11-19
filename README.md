@@ -77,3 +77,66 @@ DecisionTrail/
 
 ---
 
+## 4. Environment Variables (`.env.example`)
+
+Copy `.env.example` to `.env` and configure your credentials:
+
+| Variable | Description | Required / Default |
+| :--- | :--- | :--- |
+| `GITHUB_TOKEN` | GitHub Personal Access Token (for fetching public PRs and discussions) | Optional (increases rate limits) |
+| `GROQ_API_KEY` | Groq API Key for low-latency open-weight LLM extraction | Recommended for live LLM extraction |
+| `OPENROUTER_API_KEY` | OpenRouter API Key for fallback LLM inference | Optional |
+| `LLM_PRIMARY_MODEL` | Primary model identifier on Groq | `openai/gpt-oss-20b` |
+| `LLM_FALLBACK_MODEL` | Fallback model identifier on OpenRouter | `meta-llama/llama-3.1-8b-instruct` |
+| `NEO4J_URI` | Bolt connection URI for Neo4j instance | `bolt://localhost:7687` (optional; falls back to SQLite graph) |
+| `NEO4J_USER` | Neo4j username | `neo4j` |
+| `NEO4J_PASSWORD` | Neo4j password | `password` |
+| `TARGET_REPO` | Default active repository for CLI workflows | `psf/black` |
+| `ALLOWED_POST_REPOS` | Comma-separated list of repos permitted for automated PR comments | Security guardrail |
+
+---
+
+## 5. Local Setup & Installation
+
+### Step 1: Clone and Set Up Python Virtual Environment
+```powershell
+# Clone the repository
+git clone https://github.com/your-org/decisiontrail.git
+cd decisiontrail
+
+# Create and activate Python virtual environment
+python -m venv .venv
+.\.venv\Scripts\activate   # On Windows
+# source .venv/bin/activate # On Linux/macOS
+
+# Install dependencies
+pip install -r requirements.txt
+```
+
+### Step 2: Preload Offline Cache & Run Test Suite
+```powershell
+# Pre-warm disk cache (enables 100% offline, air-gapped demo execution)
+python scripts/preload_demo_cache.py
+
+# Execute the complete automated test suite (45 tests)
+pytest tests/ -v
+```
+
+### Step 3: Start the FastAPI Backend
+```powershell
+# In Terminal 1 (from root directory):
+uvicorn api.main:app --host 127.0.0.1 --port 8000 --reload
+```
+The API documentation is available at `http://localhost:8000/docs`.
+
+### Step 4: Start the Next.js Frontend
+```powershell
+# In Terminal 2:
+cd web
+npm install
+npm run dev
+```
+Open `http://localhost:3000` to interact with DecisionTrail.
+
+---
+
