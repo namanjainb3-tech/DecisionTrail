@@ -369,5 +369,130 @@ def get_repositories(db_path: Path | str | None = None) -> list[str]:
     return sorted(list(repos))
 
 
+def delete_repository(repo: str, db_path: Path | str | None = None) -> dict[str, int]:
+    """Deletes all decisions, documents, comments, and cursors associated with a repository."""
+    conn = get_db(db_path)
+    clean_repo = repo.strip()
 
-# Repository deletion cascade logic to be added in next commit
+    # Find matching thread_ids
+    cursor = conn.execute(
+        "SELECT thread_id FROM documents WHERE thread_id LIKE ? OR thread_id LIKE ? OR url LIKE ?",
+        (f"github_{clean_repo}_%", f"github_{clean_repo}", f"%github.com/{clean_repo}%"),
+    )
+    thread_ids = [r[0] for r in cursor.fetchall()]
+
+    with conn:
+        # Delete from comments_fts for comments of these thread_ids
+        for tid in thread_ids:
+            c_cursor = conn.execute("SELECT comment_id FROM comments WHERE thread_id = ?", (tid,))
+            for c_row in c_cursor.fetchall():
+                conn.execute("DELETE FROM comments_fts WHERE comment_id = ?", (c_row[0],))
+
+        # Delete decisions
+        dec_cursor = conn.execute(
+            "DELETE FROM decisions WHERE repo_or_forum = ? OR repo_or_forum LIKE ? OR thread_id LIKE ?",
+            (clean_repo, f"%{clean_repo}%", f"github_{clean_repo}_%"),
+        )
+        deleted_decisions = dec_cursor.rowcount
+
+        # Delete documents (cascades to comments and chunks)
+        doc_count = 0
+        for tid in thread_ids:
+            d_cursor = conn.execute("DELETE FROM documents WHERE thread_id = ?", (tid,))
+            doc_count += d_cursor.rowcount
+
+        # Delete ingest cursor
+        conn.execute("DELETE FROM ingest_cursors WHERE source_id = ?", (clean_repo,))
+
+    conn.close()
+    return {"deleted_decisions": deleted_decisions, "deleted_documents": doc_count}
+
+
+def get_cursor(source_type: str, source_id: str, db_path: Path | str | None = None) -> str | None:
+    conn = get_db(db_path)
+    cursor = conn.execute(
+        "SELECT last_updated_at FROM ingest_cursors WHERE source_type = ? AND source_id = ?",
+        (source_type, source_id),
+    )
+    row = cursor.fetchone()
+    conn.close()
+    return row["last_updated_at"] if row else None
+
+
+def upsert_cursor(
+    source_type: str, source_id: str, last_updated_at: str, db_path: Path | str | None = None
+) -> None:
+    conn = get_db(db_path)
+    with conn:
+        conn.execute(
+            """
+            INSERT INTO ingest_cursors (source_type, source_id, last_updated_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(source_type, source_id) DO UPDATE SET
+                last_updated_at = excluded.last_updated_at;
+            """,
+            (source_type, source_id, last_updated_at),
+        )
+    conn.close()
+
+
+def search_comments_bm25(
+    query: str, limit: int = 10, db_path: Path | str | None = None
+) -> list[dict[str, Any]]:
+    conn = get_db(db_path)
+    # Sanitize query for FTS5
+    safe_query = '"' + query.replace('"', '""') + '"'
+    sql = """
+        SELECT c.*, bm25(comments_fts) as rank
+        FROM comments_fts
+        JOIN comments c ON comments_fts.comment_id = c.comment_id
+        WHERE comments_fts MATCH ?
+        ORDER BY rank
+        LIMIT ?;
+    """
+    try:
+        cursor = conn.execute(sql, (safe_query, limit))
+        rows = cursor.fetchall()
+        return [dict(r) for r in rows]
+    except Exception:
+        # Fallback to simple LIKE if FTS expression has syntax issue
+        fallback_sql = """
+            SELECT *, 0.0 as rank
+            FROM comments
+            WHERE body LIKE ?
+            LIMIT ?;
+        """
+        cursor = conn.execute(fallback_sql, (f"%{query}%", limit))
+        rows = cursor.fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def get_documents(
+    thread_ids: list[str] | None = None,
+    limit: int = 100,
+    db_path: Path | str | None = None,
+) -> list[Document]:
+    conn = get_db(db_path)
+    if thread_ids:
+        placeholders = ",".join("?" for _ in thread_ids)
+        sql = f"SELECT raw_json FROM documents WHERE thread_id IN ({placeholders}) LIMIT ?"
+        params = list(thread_ids) + [limit]
+    else:
+        sql = "SELECT raw_json FROM documents LIMIT ?"
+        params = [limit]
+
+    cursor = conn.execute(sql, params)
+    rows = cursor.fetchall()
+    conn.close()
+
+    documents: list[Document] = []
+    for r in rows:
+        try:
+            documents.append(Document.model_validate_json(r["raw_json"]))
+        except Exception:
+            continue
+    return documents
+
+
