@@ -421,6 +421,4 @@ export default function PRSimulatorPage() {
       </div>
     </div>
   );
-}    </div>
-  );
 }
