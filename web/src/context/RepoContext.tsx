@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { fetchRepositories, ingestRepository } from '../lib/api';
+import { fetchRepositories, ingestRepository, deleteRepository } from '../lib/api';
 
 export interface IngestResult {
   success: boolean;
@@ -18,6 +18,7 @@ interface RepoContextType {
   refreshRepositories: () => Promise<string[]>;
   loadingRepo: boolean;
   loadNewRepo: (repoUrl: string) => Promise<IngestResult>;
+  removeRepo: (repo: string) => Promise<{ success: boolean; message: string }>;
 }
 
 const RepoContext = createContext<RepoContextType>({
@@ -27,6 +28,7 @@ const RepoContext = createContext<RepoContextType>({
   refreshRepositories: async () => [],
   loadingRepo: false,
   loadNewRepo: async () => ({ success: false, message: '' }),
+  removeRepo: async () => ({ success: false, message: '' }),
 });
 
 export const RepoProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -94,6 +96,26 @@ export const RepoProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const removeRepo = async (repo: string): Promise<{ success: boolean; message: string }> => {
+    try {
+      await deleteRepository(repo);
+      const updatedList = await refreshRepositories();
+      if (activeRepo === repo) {
+        const nextRepo = updatedList.length > 0 ? updatedList[0] : '';
+        setActiveRepo(nextRepo);
+      }
+      return {
+        success: true,
+        message: `Successfully removed repository "${repo}" and all its extracted data.`,
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        message: err.message || 'Failed to remove repository.',
+      };
+    }
+  };
+
   return (
     <RepoContext.Provider
       value={{
@@ -103,6 +125,7 @@ export const RepoProvider: React.FC<{ children: React.ReactNode }> = ({ children
         refreshRepositories,
         loadingRepo,
         loadNewRepo,
+        removeRepo,
       }}
     >
       {children}
