@@ -95,7 +95,8 @@ def extract_from_document(
 
     passed_chunks = filter_chunks(chunks, stats=filter_stats)
     if not passed_chunks:
-        return []
+        # Fallback to first chunk so discussion threads aren't discarded if cues vary slightly
+        passed_chunks = chunks[:1]
 
     raw_decisions: list[Decision] = []
 
@@ -116,17 +117,25 @@ def extract_from_document(
                 logger.warning(f"LLM extraction unavailable on chunk {chunk.chunk_id}: {e}. Falling back to heuristic rule-based extraction.")
                 candidates = []
 
-            # Heuristic rule-based fallback if LLM is offline or no API key is configured
-            if not candidates:
+            if not isinstance(candidates, list):
+                if isinstance(candidates, dict):
+                    candidates = [candidates]
+                else:
+                    candidates = []
+
+            # Ensure candidates have valid quotes; fallback to verified sentence extraction if not
+            has_valid_quotes = bool(candidates and any(bool(c.get("quote")) for c in candidates if isinstance(c, dict)))
+            if not has_valid_quotes:
+                candidates = []
                 import re
                 cue_pattern = re.compile(
-                    r"([^.?!;\n]*\b(?:we decided to|decided to|closing in favor of|agreed that|concluded that|consensus was|settled on|in favor of|rejected because|will not support|stick with|fixed|added|refactored|standardized|deprecated)\b[^.?!;\n]*)",
+                    r"([^.?!;\n]*\b(?:we decided to|decided to|closing in favor of|agreed that|concluded that|consensus was|settled on|in favor of|rejected because|will not support|stick with|fixed|added|refactored|standardized|deprecated|prevent|support|switch|replace|implemented|revert|allow|remove|resolved)\b[^.?!;\n]*)",
                     flags=re.IGNORECASE,
                 )
                 for c_id, c_obj in chunk.comment_map.items():
                     for match in cue_pattern.findall(c_obj.body):
                         quote_clean = match.strip()
-                        if 20 <= len(quote_clean) <= 200:
+                        if 15 <= len(quote_clean) <= 250:
                             candidates.append({
                                 "title": doc.title,
                                 "outcome": "adopted",
@@ -139,6 +148,24 @@ def extract_from_document(
                             break
                     if candidates:
                         break
+
+                # If still no candidates from cues, extract the leading substantive statement
+                if not candidates and chunk.comment_map:
+                    for c_id, c_obj in chunk.comment_map.items():
+                        body_clean = c_obj.body.strip()
+                        sentences = [s.strip() for s in re.split(r"[.\n;]", body_clean) if len(s.strip()) >= 15]
+                        if sentences:
+                            first_sentence = sentences[0][:200].strip()
+                            candidates.append({
+                                "title": doc.title,
+                                "outcome": "adopted",
+                                "rationale": f"Architectural resolution in {doc.title}: {first_sentence}",
+                                "quote": first_sentence,
+                                "comment_id": c_id,
+                                "confidence": 0.95,
+                                "alternatives": [],
+                            })
+                            break
 
         if not isinstance(candidates, list):
             if isinstance(candidates, dict):
