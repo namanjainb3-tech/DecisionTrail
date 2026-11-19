@@ -66,14 +66,18 @@ def repair_and_parse_json(text: str) -> Any:
     return json.loads(fixed)
 
 
+_is_network_offline: bool = False
+
+
 def _call_openai_compatible(
     endpoint: str,
     api_key: str,
     model: str,
     prompt: str,
     system_prompt: str | None = None,
-    timeout: float = 30.0,
+    timeout: float = 10.0,
 ) -> str:
+    global _is_network_offline
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
@@ -90,11 +94,16 @@ def _call_openai_compatible(
         "response_format": {"type": "json_object"},
     }
 
-    with httpx.Client(timeout=timeout) as client:
-        resp = client.post(endpoint, json=payload, headers=headers)
-        resp.raise_for_status()
-        data = resp.json()
-        return data["choices"][0]["message"]["content"]
+    try:
+        with httpx.Client(timeout=timeout) as client:
+            resp = client.post(endpoint, json=payload, headers=headers)
+            resp.raise_for_status()
+            data = resp.json()
+            return data["choices"][0]["message"]["content"]
+    except (httpx.ConnectError, httpx.TimeoutException) as net_err:
+        if "getaddrinfo" in str(net_err) or "NameResolution" in str(net_err):
+            _is_network_offline = True
+        raise net_err
 
 
 def complete_json(
@@ -131,8 +140,12 @@ def complete_json(
 
     # Try Primary (Groq or configured)
     primary_model = model or settings.LLM_PRIMARY_MODEL
+    if primary_model == "openai/gpt-oss-20b":
+        primary_model = "llama-3.3-70b-versatile"
+
     valid_groq_key = (
-        bool(settings.GROQ_API_KEY)
+        not _is_network_offline
+        and bool(settings.GROQ_API_KEY)
         and not settings.GROQ_API_KEY.startswith("your_")
         and not settings.GROQ_API_KEY.startswith("gsk_placeholder")
         and len(settings.GROQ_API_KEY) > 15
@@ -152,7 +165,8 @@ def complete_json(
 
     # Try Fallback (OpenRouter)
     valid_or_key = (
-        bool(settings.OPENROUTER_API_KEY)
+        not _is_network_offline
+        and bool(settings.OPENROUTER_API_KEY)
         and not settings.OPENROUTER_API_KEY.startswith("your_")
         and len(settings.OPENROUTER_API_KEY) > 15
     )
@@ -178,13 +192,7 @@ def complete_json(
                 "match": True,
                 "reason": "Semantic cosine similarity indicates matching design alternative."
             }
-        return {
-            "title": "Architectural resolution",
-            "outcome": "adopted",
-            "rationale": "Extracted via local semantic heuristics.",
-            "confidence": 0.95,
-            "alternatives": []
-        }
+        return []
 
     parsed = repair_and_parse_json(response_text)
 
