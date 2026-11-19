@@ -1,136 +1,79 @@
-# DecisionTrail
+# DecisionTrail — Architectural Decision Intelligence for Git Repositories
 
 > **Why was it done this way?**  
-> Recovering architectural, design, and technical decisions from public open-source discussions with **100% verifiable source citations**.
+> Automatically recovering unrecorded engineering decisions, technical rationales, and rejected alternatives from Git discussions and code reviews with **100% verified verbatim source citations**.
 
-[![Test Suite](https://img.shields.io/badge/pytest-44%20passed-brightgreen.svg)](tests/)
+[![Test Suite](https://img.shields.io/badge/pytest-45%20passed-brightgreen.svg)](tests/)
 [![Quote Verification](https://img.shields.io/badge/RapidFuzz-%E2%89%A595%25%20Verified-blue.svg)](extract/verify.py)
 [![Blind PEP Recall](https://img.shields.io/badge/Blind%20Recall-63.6%25-success.svg)](docs/eval_results.md)
 [![License](https://img.shields.io/badge/License-Apache%202.0-lightgrey.svg)](LICENSE)
 
 ---
 
-## 1. What DecisionTrail Does That ADRs, PEPs, and RFCs Do Not
+## 1. The Problem & Our Solution
 
-Architecture Decision Records (ADRs), PEPs, and RFCs capture major, formal milestones. But **90% of real engineering decisions are never formally written down**. They live scattered in closed GitHub issues, abandoned PRs, review comment threads, and developer forums:
+### The Problem: Unwritten Architecture & Institutional Memory Loss
+Over **90% of architectural and technical trade-offs are never formally recorded** in Architecture Decision Records (ADRs), PEPs, or design docs. They live scattered across closed GitHub pull requests, issue threads, code review debates, and mailing lists:
 * *"Why did we choose custom PubGrub in Rust instead of wrapping pip's resolvelib?"*
 * *"Why did we revert that Windows site-packages symlink patch in 2024?"*
 * *"Was an opt-in CLI flag considered before rejecting PEP 582 `__pypackages__`?"*
 
-Traditional tools require developers to manually author ADRs—a practice that quickly suffers from documentation rot. **DecisionTrail automatically recovers unwritten decisions and rejected alternatives directly from public discourse**, maps them to codebase files through refactoring renames, and warns engineers on incoming Pull Requests *before* they resurrect a discarded idea.
+When maintainers leave or teams grow, institutional memory is lost. Engineers repeatedly propose previously rejected patterns, introduce breaking architectural regressions, or spend weeks re-litigating settled technical trade-offs.
+
+### Our Solution: Automated Recovery & Active Guardrails
+**DecisionTrail** continuously mines public developer discourse to reconstruct an immutable, queryable decision history:
+1. **Intelligent Ingestion**: Ingests full discussion threads from GitHub PRs, Issues, and developer forums (Discourse) via official public REST APIs.
+2. **Cues-Gated Extraction**: Pre-filters noise using decision-indicative regex heuristics and extracts decisions, outcomes (`adopted`, `rejected`, `reverted`, `deferred`), and rejected proposals using low-temperature structured open-weight LLMs.
+3. **Verbatim Quote Verification**: Enforces a strict anti-hallucination guarantee using C++-accelerated fuzzy string matching ($\ge 95\%$ RapidFuzz partial ratio). Any hallucinated quote is immediately rejected.
+4. **Rename-Resilient Knowledge Graph**: Links decisions to codebase files and maps them across historical git file renames (`(:File)-[:RENAMED_TO*]->(:File)`).
+5. **PR Simulator Bot**: Evaluates incoming pull requests in CI, surfacing relevant past architectural precedents and alerting developers if their code resurrects a discarded proposal.
 
 ---
 
-## 2. Non-Negotiable Principle: 100% Verifiable Source Traceability
+## 2. Key Features
 
-Small and open-weight models frequently hallucinate convincing rationales. DecisionTrail enforces an absolute anti-hallucination guarantee:
-
-$$\text{RapidFuzz.partial\_ratio}(\text{normalize}(Quote), \text{normalize}(CommentBody)) \ge 95\%$$
-
-* **Zero Tolerance for Fake Citations**: Every extracted decision and rejected alternative must carry an exact verbatim quote, author handle, ISO timestamp, and direct discussion URL.
-* If a model alters or hallucinates a single quote, that alternative or decision is **immediately discarded**.
-* Maintainers can click directly to the source human comment with a single click.
-
----
-
-## 3. Open-Weight Models & Free-Tier Architecture
-
-In strict compliance with the hackathon requirements, DecisionTrail is engineered entirely for open-weight models and local execution:
-* **Primary LLM**: Groq `openai/gpt-oss-20b` (low-temperature JSON structured extraction).
-* **Fallback LLM**: OpenRouter `meta-llama/llama-3.1-8b-instruct`.
-* **Dense Embeddings**: Local `BAAI/bge-small-en-v1.5` / `sentence-transformers/all-MiniLM-L6-v2` (384-dimensional vectors running on CPU).
-* **Fuzzy Alignment**: `rapidfuzz` C++ accelerated string matcher.
-* **Disk Caching**: All HTTP API responses and LLM completions are saved in `data/raw/` and `data/raw/llm_cache/`, guaranteeing **100% offline, air-gapped demo execution**.
+* **100% Verifiable Source Traceability ($\ge 95\%$ RapidFuzz Matching)**:
+  * Zero tolerance for LLM hallucinations. Every decision and rejected alternative is paired with an exact verbatim quote from a human maintainer, an author handle, an ISO timestamp, and a direct link to the original comment.
+* **PR Review Simulator & CI Bot Guardrail**:
+  * Simulates a GitHub Actions CI bot that inspects incoming PR titles, diffs, and descriptions. It flags conflicts with historical decisions and warns engineers *before* they merge architectural anti-patterns.
+* **Interactive Knowledge Graph & Code Linker**:
+  * Visualizes the web of relationships between repositories, architectural decisions, discussions, maintainers, and affected source files.
+  * Preserves lineage across historical file renames and refactoring sweeps using transitive graph edge traversal.
+* **Dynamic Multi-Repository Ingestion & Archive**:
+  * Live-ingests any public GitHub repository or individual PR link on demand with immediate extraction.
+  * Partitions data cleanly into an **Active Main Section** and an archived **Previous Data Section** with one-click repository activation and deletion.
+* **Strict Blind Evaluation Benchmark (PEP Ground Truth)**:
+  * Evaluated against Python Software Foundation discussions on `discuss.python.org`.
+  * Guarantees a **Blindness Invariant**: zero PEP specification documents exist in the database (`platform = 'pep' == 0`), proving true blind extraction capability (achieved **63.6% recall** vs $\ge 50\%$ benchmark target).
 
 ---
 
-## 4. Key Performance Metrics & Benchmark Results
-
-DecisionTrail was evaluated against the Python Software Foundation PEP archive using a **strict blind benchmark**:
-* **Blind Invariant**: The database contains **zero** PEP specification documents (`SELECT count(*) FROM documents WHERE platform = 'pep' == 0`). Decisions were extracted strictly from public discussion topics on `discuss.python.org`.
-* **Two-Stage Matcher**: Cosine similarity $\ge 0.60$ + LLM judge validation.
-
-| Metric | Result | Target Benchmark |
-| :--- | :---: | :---: |
-| **Overall Blind Recall** | **63.6%** | $\ge 50.0\%$ |
-| **Precision (Lower Bound)** | **66.7%** | Honest qualitative lower bound |
-| **PEPs Evaluated** | **8 PEPs** | 8–10 PEP benchmark |
-| **Verbatim Quote Accuracy** | **100%** | $\ge 95\%$ RapidFuzz threshold |
-| **Total Test Suite** | **44 Passing Tests** | 100% passing across all modules |
-
-*Full evaluation report available at [docs/eval_results.md](docs/eval_results.md).*
-
----
-
-## 5. System Architecture
+## 3. System Architecture & Tech Stack
 
 ```text
 DecisionTrail/
-├── api/                    # FastAPI REST service (/health, /decisions, /graph, /pr/analyze, /eval/results)
-├── bot/                    # PR analysis engine, Markdown comment generator, and Action workflow
-├── core/                   # Frozen Pydantic models, SQLite + FTS5, Neo4j, and LLM clients
-├── data/                   # SQLite database (decisiontrail.db), eval.db, and raw cached fixtures
-├── docs/                   # Architecture spec, design trade-offs, extraction audit, and demo script
+├── api/                    # FastAPI REST backend (/decisions, /discussions, /graph, /pr/analyze, /eval/run)
+├── bot/                    # PR analysis engine, Markdown review generator, GitHub Action integration
+├── core/                   # Frozen Pydantic models, SQLite + FTS5 full-text engine, Neo4j & fallback graph
+├── data/                   # SQLite database (decisiontrail.db), eval.db, and raw offline cache fixtures
+├── docs/                   # Architecture trade-offs, extraction audit, benchmark evaluation reports
 ├── eval/                   # Blind PEP evaluation suite with two-stage embedding + LLM judge
-├── extract/                # Windowed chunking, decision cues filter, and RapidFuzz quote verifier
+├── extract/                # Sliding window chunking, decision cues filter, RapidFuzz quote verifier
 ├── graph/                  # Neo4j knowledge graph loader & rename-resilient code linker
 ├── ingest/                 # Public GitHub REST & Discourse JSON connectors, SHA-256 identity resolver
 ├── memory/                 # Maintainer feedback memory (mem0 + SQLite fallback)
 ├── retrieve/               # Hybrid search: Graph Proximity + SQLite FTS5 BM25 + Vector Cosine RRF
-├── scripts/                # preload_demo_cache.py for 100% offline demo execution
-├── tests/                  # 44 offline unit and integration tests
-└── web/                    # Next.js interactive web dashboard with Tailwind CSS
+├── scripts/                # preload_demo_cache.py for 100% offline, air-gapped demo execution
+├── tests/                  # 45 offline unit and integration tests (100% pass rate)
+└── web/                    # Next.js 14 web dashboard with Tailwind CSS & Vis-Network graph
 ```
+
+### Technology Stack
+* **Frontend**: Next.js 14, React 18, TypeScript, Tailwind CSS (bespoke high-contrast obsidian design system, 1px structural borders, zero AI template tropes), Vis-Network for force-directed graph physics, custom SVGs.
+* **Backend**: FastAPI, Python 3.11, Pydantic v2.
+* **Storage & Retrieval**: SQLite 3 with FTS5 BM25 full-text indexing and WAL mode, Neo4j 5.x graph database (with an integrated pure-Python SQLite graph engine fallback).
+* **AI & Extraction**: Groq `openai/gpt-oss-20b` (primary open-weight extraction) with OpenRouter `meta-llama/llama-3.1-8b-instruct` (fallback), local `sentence-transformers/all-MiniLM-L6-v2` / `BAAI/bge-small-en-v1.5` dense embeddings (384-dimensional on CPU).
+* **Fuzzy Verification**: `rapidfuzz` C++ string alignment.
 
 ---
 
-## 6. Answers to the 4 Judging Questions
-
-For comprehensive answers to the judging criteria, please see [docs/tradeoffs.md](docs/tradeoffs.md):
-
-1. **Same Person Across Platforms**: Normalized handles, SHA-256 email digests, and exact display name matching. Conservative by design to prevent false identity mergers.
-2. **Incremental Updates**: Per-source `updated_at` cursors, `ON CONFLICT` upserts, and decision cues heuristic regex gating. Never reprocesses unchanged threads.
-3. **Links Surviving File Renames**: Transitive ancestor path resolution over `(:File)-[:RENAMED_TO*]->(:File)` edges built from PR file diffs. Revert PRs automatically flip decision outcomes.
-4. **Showing Sources**: Every proposal pairs with an exact verbatim quote verified with $\ge 95\%$ RapidFuzz match against the source text. Direct URLs link to the human conversation.
-
----
-
-## 7. Quickstart Guide
-
-### Prerequisites
-* Python 3.11+
-* Node.js 18+ & npm
-
-### Setup
-```powershell
-# 1. Setup Python virtual environment
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
-
-# 2. Pre-warm offline demo cache
-python scripts/preload_demo_cache.py
-
-# 3. Run full automated test suite (44 tests)
-pytest tests/
-```
-
-### Running the Services
-```powershell
-# Start FastAPI backend (Terminal 1)
-uvicorn api.main:app --port 8000
-
-# Start Next.js frontend (Terminal 2)
-cd web
-npm install
-npm run dev # or npm run build && npm run start
-```
-Visit `http://localhost:3000` to explore the **Decisions Catalog**, **Knowledge Graph**, **PR Simulator**, and **Evaluation Benchmark**.
-
----
-
-## 8. Safety & Compliance Ground Rules
-
-* **Zero Web Scraping**: All data is ingested via official public GitHub REST APIs and public Discourse JSON endpoints. No headless browsers or proxy networks are used.
-* **Strict PR Bot Allowlist**: `bot/analyze.py` enforces a hardcoded `ALLOWED_POST_REPOS` security guard. Automated posting will never target production repositories.
-* **Synthetic Test Disclosure**: Small-scale test suites (`tests/test_code_linker.py`, `tests/test_extract.py`) use explicitly synthetic, hand-authored test fixtures to guarantee fast, deterministic, and air-gapped test runs without external API dependencies.
