@@ -226,8 +226,8 @@ def get_decisions(
         params.extend([repo, f"%{repo}%"])
 
     if q:
-        clauses.append("(title LIKE ? OR rationale LIKE ?)")
-        params.extend([f"%{q}%", f"%{q}%"])
+        clauses.append("(title LIKE ? OR rationale LIKE ? OR thread_id LIKE ? OR id LIKE ?)")
+        params.extend([f"%{q}%", f"%{q}%", f"%{q}%", f"%{q}%"])
 
     if path:
         clauses.append("linked_paths LIKE ?")
@@ -249,6 +249,82 @@ def get_decisions(
         d["linked_paths"] = json.loads(d["linked_paths"]) if d["linked_paths"] else []
         result.append(d)
     return result
+
+
+def get_discussions_summary(
+    repo: str | None = None,
+    q: str | None = None,
+    limit: int = 50,
+    db_path: Path | str | None = None,
+) -> list[dict[str, Any]]:
+    conn = get_db(db_path)
+    clauses = []
+    params: list[Any] = []
+
+    if repo and repo.lower() != "all":
+        clauses.append("(d.thread_id LIKE ? OR d.url LIKE ?)")
+        params.extend([f"%{repo}%", f"%{repo}%"])
+
+    if q and q.strip():
+        term = f"%{q.strip()}%"
+        clauses.append("(d.title LIKE ? OR d.thread_id LIKE ? OR d.url LIKE ?)")
+        params.extend([term, term, term])
+
+    where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    sql = f"""
+        SELECT 
+            d.thread_id,
+            d.platform,
+            d.url,
+            d.title,
+            d.created_at,
+            COUNT(c.comment_id) as comment_count
+        FROM documents d
+        LEFT JOIN comments c ON d.thread_id = c.thread_id
+        {where_sql}
+        GROUP BY d.thread_id
+        ORDER BY d.rowid DESC
+        LIMIT ?
+    """
+    params.append(limit)
+
+    cursor = conn.execute(sql, params)
+    rows = cursor.fetchall()
+    conn.close()
+
+    result = []
+    for r in rows:
+        result.append({
+            "thread_id": r["thread_id"],
+            "platform": r["platform"],
+            "url": r["url"],
+            "title": r["title"],
+            "created_at": r["created_at"],
+            "comment_count": r["comment_count"],
+        })
+    return result
+
+
+def get_discussion_detail(
+    thread_id: str,
+    db_path: Path | str | None = None,
+) -> dict[str, Any] | None:
+    conn = get_db(db_path)
+    cursor = conn.execute("SELECT * FROM documents WHERE thread_id = ?", (thread_id,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return None
+
+    doc = dict(row)
+    c_cursor = conn.execute(
+        "SELECT * FROM comments WHERE thread_id = ? ORDER BY posted_at ASC", (thread_id,)
+    )
+    comments = [dict(c) for c in c_cursor.fetchall()]
+    conn.close()
+
+    doc["comments"] = comments
+    return doc
 
 
 def get_repositories(db_path: Path | str | None = None) -> list[str]:

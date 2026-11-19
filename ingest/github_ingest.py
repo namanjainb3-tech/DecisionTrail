@@ -256,3 +256,106 @@ def ingest_github_repo(
 
     return documents
 
+
+def ingest_single_github_issue(
+    repo: str,
+    number: int,
+    token: str | None = None,
+    client: httpx.Client | None = None,
+    db_path: Path | str | None = None,
+    raw_dir: Path | None = None,
+) -> Document | None:
+    """Ingests a single specific GitHub PR or Issue and all its discussion comments."""
+    repo = clean_repo_name(repo)
+    issue_url = f"https://api.github.com/repos/{repo}/issues/{number}"
+    try:
+        item = make_github_request(issue_url, token=token, client=client, raw_dir=raw_dir)
+    except Exception as e:
+        logger.error(f"Failed to fetch issue #{number} from {repo}: {e}")
+        return None
+
+    is_pr = "pull_request" in item
+    platform = "github_pr" if is_pr else "github_issue"
+    thread_id = f"github_{repo}_{number}"
+    title = item.get("title", f"Issue #{number}")
+    created_at = datetime.fromisoformat(item["created_at"].replace("Z", "+00:00"))
+
+    comments: list[Comment] = []
+
+    # 1. Thread body as first comment
+    body = item.get("body") or ""
+    author = item.get("user", {}).get("login", "unknown")
+    if not is_bot_account(author) and body.strip():
+        resolve_canonical_person(platform, author, db_path=db_path)
+        comments.append(
+            Comment(
+                comment_id=f"{thread_id}_body",
+                author_handle=author,
+                author_email=None,
+                posted_at=created_at,
+                body=body,
+                url=item.get("html_url", f"https://github.com/{repo}/pull/{number}"),
+            )
+        )
+
+    # 2. Fetch issue comments
+    comments_url = item.get("comments_url")
+    if comments_url:
+        try:
+            c_list = make_github_request(comments_url, token=token, client=client, raw_dir=raw_dir)
+            for c_item in c_list:
+                c_author = c_item.get("user", {}).get("login", "unknown")
+                c_body = c_item.get("body") or ""
+                if is_bot_account(c_author) or not c_body.strip():
+                    continue
+                resolve_canonical_person(platform, c_author, db_path=db_path)
+                comments.append(
+                    Comment(
+                        comment_id=f"gh_c_{c_item['id']}",
+                        author_handle=c_author,
+                        author_email=None,
+                        posted_at=datetime.fromisoformat(c_item["created_at"].replace("Z", "+00:00")),
+                        body=c_body,
+                        url=c_item.get("html_url", item["html_url"]),
+                    )
+                )
+        except Exception as e:
+            logger.warning(f"Error fetching comments for #{number}: {e}")
+
+    # 3. For PRs, fetch review comments
+    if is_pr and "pull_request" in item and "url" in item["pull_request"]:
+        pr_url = item["pull_request"]["url"]
+        review_comments_url = f"{pr_url}/comments"
+        try:
+            r_comments = make_github_request(review_comments_url, token=token, client=client, raw_dir=raw_dir)
+            for r_item in r_comments:
+                r_author = r_item.get("user", {}).get("login", "unknown")
+                r_body = r_item.get("body") or ""
+                if is_bot_account(r_author) or not r_body.strip():
+                    continue
+                resolve_canonical_person("github_review", r_author, db_path=db_path)
+                comments.append(
+                    Comment(
+                        comment_id=f"gh_rc_{r_item['id']}",
+                        author_handle=r_author,
+                        author_email=None,
+                        posted_at=datetime.fromisoformat(r_item["created_at"].replace("Z", "+00:00")),
+                        body=r_body,
+                        url=r_item.get("html_url", item["html_url"]),
+                    )
+                )
+        except Exception as e:
+            logger.warning(f"Error fetching review comments for PR #{number}: {e}")
+
+    doc = Document(
+        thread_id=thread_id,
+        platform=platform,
+        url=item.get("html_url", f"https://github.com/{repo}/pull/{number}"),
+        title=title,
+        created_at=created_at,
+        comments=comments,
+    )
+
+    upsert_document(doc, db_path=db_path)
+    return doc
+

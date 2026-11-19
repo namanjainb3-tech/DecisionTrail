@@ -8,6 +8,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
+from core.config import settings
 from core.db_sqlite import get_db, get_decisions, init_db
 from core.models import Decision
 from graph.loader import get_mock_graph_state, get_neighborhood as neighborhood, rebuild_from_sqlite
@@ -72,12 +73,13 @@ class ExtractRunRequest(BaseModel):
 
 
 class PRAnalyzeRequest(BaseModel):
-    repo: str = Field(default="astral-sh/uv", description="Repository identifier")
+    repo: str = Field(default="django/django", description="Repository identifier")
     changed_files: list[str] = Field(..., description="List of file paths changed in the PR")
     pr_title: str = Field(default="", description="PR title")
     pr_diff_summary: str = Field(default="", description="Summary of the PR diff or description")
     post_to_github: bool = Field(default=False, description="Whether to actually post the comment to GitHub")
-    threshold: float = Field(default=0.35, description="Minimum relevance score threshold")
+    threshold: float = Field(default=0.25, description="Minimum relevance score threshold")
+    groq_api_key: str | None = Field(default=None, description="Optional custom Groq API key for acceleration")
 
 
 class FeedbackRequest(BaseModel):
@@ -104,7 +106,32 @@ def health() -> dict[str, str]:
 @app.post("/ingest/github")
 def api_ingest_github(req: IngestGithubRequest) -> dict[str, Any]:
     try:
-        from ingest.github_ingest import clean_repo_name
+        import re
+        from ingest.github_ingest import clean_repo_name, ingest_single_github_issue
+
+        # Check if user passed a specific PR or Issue URL (e.g. https://github.com/org/repo/pull/123 or org/repo#123)
+        single_match = re.search(r"(?:https?://)?(?:www\.)?github\.com/([^/]+/[^/]+)/(?:pull|issues)/(\d+)", req.repo.strip())
+        if not single_match:
+            single_match = re.search(r"^([^/]+/[^/]+)(?:/(?:pull|issues)/|#)(\d+)$", req.repo.strip())
+        if single_match:
+            clean_repo = single_match.group(1).strip()
+            number = int(single_match.group(2))
+            doc = ingest_single_github_issue(repo=clean_repo, number=number)
+            if not doc:
+                raise HTTPException(status_code=404, detail=f"Could not fetch PR/Issue #{number} from {clean_repo}")
+            extracted = run_extraction_pipeline(thread_ids=[doc.thread_id])
+            rebuild_from_sqlite()
+            return {
+                "status": "success",
+                "repo": clean_repo,
+                "is_single_pr": True,
+                "thread_id": doc.thread_id,
+                "title": doc.title,
+                "number": number,
+                "documents_ingested": 1,
+                "decisions_extracted": len(extracted),
+            }
+
         clean_repo = clean_repo_name(req.repo)
 
         # Ingest recent issues and discussions
@@ -188,6 +215,27 @@ def get_decision_detail(decision_id: str) -> dict[str, Any]:
     raise HTTPException(status_code=404, detail="Decision not found")
 
 
+@app.get("/discussions")
+def list_discussions(
+    repo: str | None = None,
+    q: str | None = None,
+    limit: int = 50,
+) -> list[dict[str, Any]]:
+    from core.db_sqlite import get_discussions_summary
+    return get_discussions_summary(repo=repo, q=q, limit=limit)
+
+
+@app.get("/discussions/{thread_id:path}")
+def get_discussion(thread_id: str) -> dict[str, Any]:
+    from urllib.parse import unquote
+    from core.db_sqlite import get_discussion_detail
+    clean_id = unquote(thread_id)
+    doc = get_discussion_detail(clean_id) or get_discussion_detail(thread_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Discussion thread not found")
+    return doc
+
+
 @app.get("/graph/status")
 def api_graph_status() -> dict[str, Any]:
     from core.db_neo4j import get_neo4j_status
@@ -228,20 +276,30 @@ def get_graph(
         matching_dec_ids = {
             n["id"]
             for n in nodes
-            if n.get("label") == "Decision"
+            if (n.get("type") == "Decision" or n.get("label") == "Decision")
             and (
                 target_repo_clean in n.get("repo_or_forum", "").lower()
                 or target_repo_clean in n.get("thread_id", "").lower()
+                or target_repo_clean in n.get("id", "").lower()
             )
         }
-        # Gather all connected neighbors (sources, alternatives, files, authors)
+        repo_node_id = f"repo_{target_repo_clean}"
         connected_node_ids = set(matching_dec_ids)
+        for n in nodes:
+            if n.get("repo_or_forum", "").lower() == target_repo_clean or n.get("id") == repo_node_id:
+                connected_node_ids.add(n["id"])
+
         filtered_edges = []
+        seen_edges = set()
         for e in edges:
-            if e["source"] in matching_dec_ids or e["target"] in matching_dec_ids:
-                connected_node_ids.add(e["source"])
-                connected_node_ids.add(e["target"])
-                filtered_edges.append(e)
+            src, tgt, rel = e["source"], e["target"], e.get("type", "")
+            if src in connected_node_ids or tgt in connected_node_ids:
+                connected_node_ids.add(src)
+                connected_node_ids.add(tgt)
+                key = (src, tgt, rel)
+                if key not in seen_edges:
+                    seen_edges.add(key)
+                    filtered_edges.append(e)
 
         filtered_nodes = [n for n in nodes if n["id"] in connected_node_ids]
         return {
@@ -270,15 +328,22 @@ def api_pr_analyze(req: PRAnalyzeRequest) -> dict[str, Any]:
         if not state["nodes"]:
             rebuild_from_sqlite()
 
-        result = analyze_pr(
-            repo=req.repo,
-            changed_files=req.changed_files,
-            pr_title=req.pr_title,
-            pr_diff_summary=req.pr_diff_summary,
-            post_to_github=req.post_to_github,
-            threshold=req.threshold,
-        )
-        return result
+        orig_key = settings.GROQ_API_KEY
+        if req.groq_api_key and len(req.groq_api_key) > 15:
+            settings.GROQ_API_KEY = req.groq_api_key
+
+        try:
+            result = analyze_pr(
+                repo=req.repo,
+                changed_files=req.changed_files,
+                pr_title=req.pr_title,
+                pr_diff_summary=req.pr_diff_summary,
+                post_to_github=req.post_to_github,
+                threshold=req.threshold,
+            )
+            return result
+        finally:
+            settings.GROQ_API_KEY = orig_key
     except PermissionError as pe:
         raise HTTPException(status_code=403, detail=str(pe))
     except Exception as e:
@@ -310,9 +375,10 @@ def api_feedback(req: FeedbackRequest) -> dict[str, Any]:
 @app.post("/eval/run")
 def api_eval_run(req: EvalRunRequest) -> dict[str, Any]:
     try:
-        summary = evaluate_peps(
+        from eval.benchmark_data import run_live_benchmark
+        summary = run_live_benchmark(
             pep_numbers=req.pep_numbers,
-            limit=req.limit,
+            db_path=settings.SQLITE_DB_PATH,
         )
         return summary
     except Exception as e:

@@ -14,7 +14,7 @@ interface SimulationNode extends GraphNode {
 }
 
 export default function GraphPage() {
-  const { activeRepo } = useRepo();
+  const { activeRepo, setActiveRepo, repositories } = useRepo();
   const [nodes, setNodes] = useState<GraphNode[]>([]);
   const [edges, setEdges] = useState<GraphEdge[]>([]);
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
@@ -36,11 +36,11 @@ export default function GraphPage() {
         fetchGraph(centerId, 2, activeRepo),
         fetchGraphStatus(),
       ]);
-      setNodes(data.nodes);
-      setEdges(data.edges);
+      setNodes(data.nodes || []);
+      setEdges(data.edges || []);
       setGraphStatus(status);
-      initSimulation(data.nodes, data.edges);
-      if (data.nodes.length > 0) {
+      initSimulation(data.nodes || [], data.edges || []);
+      if (data.nodes && data.nodes.length > 0) {
         setSelectedNode(data.nodes[0]);
       } else {
         setSelectedNode(null);
@@ -60,10 +60,13 @@ export default function GraphPage() {
     if (type === 'Decision') {
       return outcome === 'rejected' ? '#e11d48' : '#10b981';
     }
-    if (type === 'File') return '#3b82f6';
-    if (type === 'Person') return '#a855f7';
-    if (type === 'Source') return '#f59e0b';
-    return '#6b7280';
+    if (type === 'Repo') return '#6366f1'; // Indigo
+    if (type === 'Discussion') return '#06b6d4'; // Cyan
+    if (type === 'Alternative') return '#f97316'; // Orange
+    if (type === 'File') return '#3b82f6'; // Blue
+    if (type === 'Person') return '#a855f7'; // Purple
+    if (type === 'Source') return '#f59e0b'; // Amber
+    return '#64748b';
   };
 
   const initSimulation = (rawNodes: GraphNode[], rawEdges: GraphEdge[]) => {
@@ -71,15 +74,15 @@ export default function GraphPage() {
     const height = 600;
 
     const initialized: SimulationNode[] = rawNodes.map((n, i) => {
-      const angle = (i / rawNodes.length) * 2 * Math.PI;
-      const dist = 140 + (i % 3) * 60;
+      const angle = (i / Math.max(1, rawNodes.length)) * 2 * Math.PI;
+      const dist = 120 + (i % 4) * 50;
       return {
         ...n,
         x: width / 2 + Math.cos(angle) * dist + (Math.random() - 0.5) * 40,
         y: height / 2 + Math.sin(angle) * dist + (Math.random() - 0.5) * 40,
         vx: 0,
         vy: 0,
-        radius: n.type === 'Decision' ? 18 : n.type === 'File' ? 14 : 12,
+        radius: n.type === 'Repo' ? 22 : n.type === 'Decision' ? 18 : n.type === 'Discussion' ? 16 : n.type === 'File' ? 14 : 12,
         color: getNodeColor(n.type, n.outcome),
       };
     });
@@ -239,9 +242,11 @@ export default function GraphPage() {
         </div>
 
         {/* Legend */}
-        <div className="flex flex-wrap items-center gap-3 text-xs bg-[#0e1424] px-3.5 py-2 rounded-lg border border-gray-800">
+        <div className="flex flex-wrap items-center gap-2.5 text-xs bg-[#0e1424] px-3.5 py-2 rounded-lg border border-gray-800">
+          <span className="flex items-center space-x-1.5"><span className="h-2.5 w-2.5 rounded-full bg-indigo-500"></span><span className="text-gray-300">Repo</span></span>
           <span className="flex items-center space-x-1.5"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500"></span><span className="text-gray-300">Decision (Adopted)</span></span>
           <span className="flex items-center space-x-1.5"><span className="h-2.5 w-2.5 rounded-full bg-rose-500"></span><span className="text-gray-300">Decision (Rejected)</span></span>
+          <span className="flex items-center space-x-1.5"><span className="h-2.5 w-2.5 rounded-full bg-cyan-500"></span><span className="text-gray-300">Discussion</span></span>
           <span className="flex items-center space-x-1.5"><span className="h-2.5 w-2.5 rounded-full bg-blue-500"></span><span className="text-gray-300">File</span></span>
           <span className="flex items-center space-x-1.5"><span className="h-2.5 w-2.5 rounded-full bg-purple-500"></span><span className="text-gray-300">Person</span></span>
           <span className="flex items-center space-x-1.5"><span className="h-2.5 w-2.5 rounded-full bg-amber-500"></span><span className="text-gray-300">Source</span></span>
@@ -250,21 +255,38 @@ export default function GraphPage() {
 
       {/* Toolbar */}
       <div className="flex flex-wrap items-center justify-between gap-3 bg-[#0e1424] p-3 rounded-xl border border-gray-800">
-        <div className="flex items-center space-x-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Target Repository Switcher */}
+          <select
+            value={activeRepo || 'all'}
+            onChange={(e) => setActiveRepo(e.target.value)}
+            className="rounded-lg bg-gray-900 border border-emerald-500/50 px-3 py-1.5 text-xs font-semibold text-emerald-300 focus:outline-none focus:border-emerald-400"
+          >
+            <option value="all">🌐 All Repositories ({repositories.length})</option>
+            {repositories.map((r) => (
+              <option key={r} value={r}>
+                📁 {r}
+              </option>
+            ))}
+          </select>
+
           <input
             type="text"
             placeholder="Search graph nodes..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="rounded-lg bg-gray-900 border border-gray-700/80 px-3 py-1.5 text-xs text-gray-100 placeholder-gray-500 focus:outline-none focus:border-blue-500 w-48 sm:w-64"
+            className="rounded-lg bg-gray-900 border border-gray-700/80 px-3 py-1.5 text-xs text-gray-100 placeholder-gray-500 focus:outline-none focus:border-blue-500 w-44 sm:w-56"
           />
+
           <select
             value={filterType}
             onChange={(e) => setFilterType(e.target.value)}
             className="rounded-lg bg-gray-900 border border-gray-700/80 px-3 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-blue-500"
           >
             <option value="all">All Node Types</option>
+            <option value="repo">Repos Only</option>
             <option value="decision">Decisions Only</option>
+            <option value="discussion">Discussions Only</option>
             <option value="file">Files Only</option>
             <option value="person">Persons Only</option>
             <option value="source">Sources Only</option>
@@ -367,6 +389,29 @@ export default function GraphPage() {
                 <div>
                   <span className="text-gray-500 font-medium">Author Handle:</span>
                   <p className="mt-1 font-mono text-purple-400">@{selectedNode.handle}</p>
+                </div>
+              )}
+
+              {selectedNode.repo_or_forum && (
+                <div>
+                  <span className="text-gray-500 font-medium">Repository:</span>
+                  <p className="mt-1 font-mono text-indigo-400">{selectedNode.repo_or_forum}</p>
+                </div>
+              )}
+
+              {selectedNode.thread_id && (
+                <div>
+                  <span className="text-gray-500 font-medium">Discussion Thread:</span>
+                  <p className="mt-1 font-mono text-cyan-400 break-all">{selectedNode.thread_id}</p>
+                </div>
+              )}
+
+              {selectedNode.quote && (
+                <div>
+                  <span className="text-gray-500 font-medium">Verified Evidence Quote:</span>
+                  <blockquote className="mt-1 border-l-2 border-amber-500 bg-amber-950/20 p-2 text-[11px] text-amber-200 italic">
+                    "{selectedNode.quote}"
+                  </blockquote>
                 </div>
               )}
 

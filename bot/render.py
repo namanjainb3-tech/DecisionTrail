@@ -18,14 +18,20 @@ def render_decision_markdown(item: dict[str, Any]) -> str:
     title = decision.get("title", "Untitled Decision")
     outcome = decision.get("outcome", "adopted")
     rationale = decision.get("rationale", "")
+    score = item.get("score") or item.get("relevance_score")
 
     decided_at = decision.get("decided_at")
     year_str = ""
     if decided_at:
         year_str = f" ({str(decided_at)[:4]})"
 
+    score_badge = ""
+    if score is not None:
+        score_pct = int(min(1.0, float(score)) * 100)
+        score_badge = f" `Relevance: {score_pct}%`"
+
     badge = format_outcome_badge(outcome)
-    lines = [f"### {badge} {title}{year_str}"]
+    lines = [f"### {badge} {title}{year_str}{score_badge}"]
 
     # Maintainer feedback note if available
     if "maintainer_note" in item:
@@ -37,11 +43,11 @@ def render_decision_markdown(item: dict[str, Any]) -> str:
     # Rejected alternatives
     alts = decision.get("alternatives", [])
     if alts:
-        lines.append("\n**Rejected Alternatives Considered:**")
+        lines.append("\n**⚠️ Historical Rejected Alternatives Considered:**")
         for alt in alts:
             alt_text = alt.get("text", "")
             alt_reason = alt.get("reason", "")
-            alt_ev = alt.get("evidence", {})
+            alt_ev = alt.get("evidence", {}) or {}
             alt_quote = alt_ev.get("quote", "")
             alt_url = alt_ev.get("source_url", "")
             alt_author = alt_ev.get("author_handle", "")

@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { fetchEvalResults } from '../lib/api';
+import { fetchEvalResults, runEvaluation } from '../lib/api';
 import { EvalSummary } from '../lib/mockData';
 
 export default function EvalPage() {
   const [summary, setSummary] = useState<EvalSummary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [runningBenchmark, setRunningBenchmark] = useState(false);
+  const [runMessage, setRunMessage] = useState<string | null>(null);
   const [expandedPep, setExpandedPep] = useState<number | null>(582);
 
   const loadData = async () => {
@@ -16,6 +18,23 @@ export default function EvalPage() {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleRunLiveBenchmark = async () => {
+    setRunningBenchmark(true);
+    setRunMessage(null);
+    try {
+      const freshSummary = await runEvaluation();
+      setSummary(freshSummary);
+      setRunMessage(
+        `✓ Live benchmark executed successfully at ${new Date().toLocaleTimeString()}! Overall Recall: ${(freshSummary.overall_recall * 100).toFixed(1)}% across ${freshSummary.peps_evaluated} PEP discussions.`
+      );
+    } catch (err: any) {
+      console.error(err);
+      setRunMessage(`Benchmark execution failed: ${err.message || 'Run failed'}`);
+    } finally {
+      setRunningBenchmark(false);
     }
   };
 
@@ -35,13 +54,49 @@ export default function EvalPage() {
             Measuring recall of PEP "Rejected Ideas" recovered strictly from public Discourse discussions without exposing PEP text.
           </p>
         </div>
-        <button
-          onClick={loadData}
-          className="rounded-lg bg-gray-800 px-3.5 py-1.5 text-xs font-semibold text-gray-200 hover:bg-gray-700 transition"
-        >
-          ↻ Refresh Results
-        </button>
+        <div className="flex items-center space-x-2 shrink-0">
+          <button
+            onClick={handleRunLiveBenchmark}
+            disabled={runningBenchmark}
+            className="rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 px-4 py-2 text-xs font-bold text-white shadow-lg shadow-emerald-950/50 transition disabled:opacity-50 flex items-center space-x-2"
+          >
+            {runningBenchmark ? (
+              <>
+                <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-solid border-white border-r-transparent"></div>
+                <span>Evaluating Dense Embeddings...</span>
+              </>
+            ) : (
+              <>
+                <span>🚀</span>
+                <span>Run Live Benchmark</span>
+              </>
+            )}
+          </button>
+          <button
+            onClick={loadData}
+            disabled={runningBenchmark}
+            className="rounded-lg bg-gray-800 px-3.5 py-2 text-xs font-semibold text-gray-200 hover:bg-gray-700 transition"
+          >
+            ↻ Refresh
+          </button>
+        </div>
       </div>
+
+      {/* Live Benchmark Execution Notification */}
+      {runMessage && (
+        <div className="rounded-xl border border-emerald-800/80 bg-emerald-950/40 p-3.5 text-xs text-emerald-200 flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <span className="text-emerald-400 font-bold">⚡ Live Update:</span>
+            <span>{runMessage}</span>
+          </div>
+          <button
+            onClick={() => setRunMessage(null)}
+            className="text-emerald-400 hover:text-emerald-300 font-bold px-2"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* Blindness Invariant Guarantee Banner */}
       <div className="rounded-xl border border-blue-900/60 bg-blue-950/30 p-4 text-xs text-blue-200 flex items-start space-x-3">
@@ -51,6 +106,11 @@ export default function EvalPage() {
           The evaluation store strictly verifies that <code>SELECT count(*) FROM documents WHERE platform = 'pep'</code> is 0.
           DecisionTrail has zero access to the actual PEP specification documents. All recovered ideas were synthesized
           solely from public discussion threads!
+          {summary?.results?.[0]?.run_at && (
+            <div className="mt-1 text-[11px] text-blue-300/80 font-mono">
+              Last Verified Benchmark Run: {new Date(summary.results[0].run_at).toLocaleString()}
+            </div>
+          )}
         </div>
       </div>
 

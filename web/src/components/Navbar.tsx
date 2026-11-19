@@ -188,7 +188,7 @@ export const Navbar: React.FC = () => {
               <div className="space-y-1.5">
                 <span className="text-[11px] text-gray-400 font-medium">Quick Suggestions:</span>
                 <div className="flex flex-wrap gap-1.5">
-                  {['jitsi/jitsi-meet', 'django/django', 'psf/black', 'astral-sh/uv', 'pallets/flask'].map(
+                  {['jitsi/jitsi-meet', 'django/django', 'huggingface/diffusers', 'astral-sh/uv', 'pallets/flask'].map(
                     (preset) => (
                       <button
                         type="button"

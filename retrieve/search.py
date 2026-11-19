@@ -14,6 +14,7 @@ def search_candidates(
     changed_files: list[str],
     pr_title: str = "",
     pr_diff_summary: str = "",
+    repo: str = "",
     top_k: int = 10,
     driver: Any = None,
     db_path: Path | str | None = None,
@@ -113,7 +114,7 @@ def search_candidates(
                     candidates_by_id[dec_id]["vector_score"], v_score
                 )
 
-    # 3. Score Fusion: Graph Proximity + Reciprocal Rank Fusion (RRF)
+    # 3. Score Fusion: Graph Proximity + Semantic & Lexical Relevance
     scored_candidates = []
     for dec_id, item in candidates_by_id.items():
         # Ensure full decision payload is loaded
@@ -122,15 +123,23 @@ def search_candidates(
 
         graph_score = item["graph_score"]
         vector_score = item["vector_score"]
+        bm25_rank = item["bm25_rank"]
 
-        rrf_text_score = 0.0
-        if item["bm25_rank"] is not None:
-            rrf_text_score += 1.0 / (60.0 + item["bm25_rank"])
-        if vector_score > 0:
-            rrf_text_score += vector_score * 0.5
+        lexical_score = (1.0 / (10.0 + bm25_rank)) if bm25_rank is not None else 0.0
+        semantic_score = max(vector_score, lexical_score)
 
-        # Combined composite score
-        total_score = graph_score * 0.6 + rrf_text_score * 0.4
+        if graph_score > 0 and semantic_score > 0:
+            total_score = graph_score * 0.45 + semantic_score * 0.55
+        elif graph_score > 0:
+            total_score = graph_score * 0.8
+        else:
+            total_score = semantic_score * 0.95
+
+        # Repo affinity boost
+        dec_repo = (item.get("decision", {}) or {}).get("repo_or_forum", "").lower()
+        if repo and dec_repo and (repo.lower() in dec_repo or dec_repo in repo.lower()):
+            total_score = min(1.0, total_score + 0.15)
+
         item["score"] = total_score
         item["id"] = dec_id
         scored_candidates.append(item)

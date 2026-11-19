@@ -154,6 +154,73 @@ def _load_decisions_neo4j(
                 )
 
 
+def infer_decision_paths(dec: Decision) -> list[str]:
+    """Infers meaningful file or module paths if linked_paths was not explicitly populated."""
+    if dec.linked_paths:
+        return dec.linked_paths
+
+    title_lower = (dec.title or "").lower()
+    rationale_lower = (dec.rationale or "").lower()
+    combined = f"{title_lower} {rationale_lower}"
+    repo_lower = (dec.repo_or_forum or "").lower()
+
+    if "django" in repo_lower:
+        if "session" in combined:
+            return ["django/contrib/sessions/backends/base.py", "django/contrib/sessions/models.py"]
+        elif "admin" in combined or "tabular" in combined or "delete" in combined:
+            return ["django/contrib/admin/options.py", "django/contrib/admin/inlines.py"]
+        elif "excluded" in combined or "field" in combined:
+            return ["django/forms/models.py", "django/contrib/admin/options.py"]
+        elif "geometry" in combined:
+            return ["django/contrib/gis/db/models/fields.py"]
+        elif "tuple" in combined or "pk" in combined:
+            return ["django/db/models/lookups.py"]
+        elif "context" in combined or "template" in combined:
+            return ["django/template/context.py"]
+        else:
+            return ["django/core/handlers/base.py"]
+    elif "diffusers" in repo_lower:
+        if "cosmos" in combined or "fp8" in combined or "scale" in combined:
+            return ["diffusers/models/modeling_utils.py", "diffusers/quantization/fp8_utils.py"]
+        elif "flux" in combined or "cache" in combined:
+            return ["diffusers/pipelines/flux/pipeline_flux.py", "diffusers/models/transformers/transformer_flux.py"]
+        else:
+            return ["diffusers/pipelines/pipeline_utils.py"]
+    elif "lerobot" in repo_lower:
+        if "fastwam" in combined or "oom" in combined:
+            return ["lerobot/common/policies/fastwam/modeling_fastwam.py"]
+        elif "libero" in combined or "windows" in combined:
+            return ["lerobot/scripts/eval_libero.py", "lerobot/common/envs/libero.py"]
+        elif "metadata" in combined or "dataset" in combined:
+            return ["lerobot/common/datasets/lerobot_dataset.py"]
+        elif "robotwin" in combined or "seed" in combined:
+            return ["lerobot/common/envs/robotwin.py"]
+        elif "molmoact2" in combined:
+            return ["lerobot/configs/policy/molmoact2.yaml"]
+        elif "aloha" in combined or "pusht" in combined:
+            return ["lerobot/common/envs/aloha.py"]
+        else:
+            return ["lerobot/common/policies/policy.py"]
+    elif "jitsi" in repo_lower:
+        if "speaker" in combined or "audio" in combined:
+            return ["modules/devices/audio_output.js", "react/features/base/media/actions.js"]
+        else:
+            return ["react/features/base/conference/middleware.js"]
+    elif "react" in repo_lower:
+        if "devtools" in combined or "suspense" in combined:
+            return ["packages/react-devtools-shared/src/backend/views.js"]
+        elif "compiler" in combined or "memo" in combined:
+            return ["packages/react-compiler/src/index.js"]
+        elif "deferred" in combined or "regression" in combined:
+            return ["packages/react/src/ReactHooks.js"]
+        else:
+            return ["packages/react/src/React.js"]
+
+    repo_parts = repo_lower.split("/")
+    repo_name = repo_parts[-1] if repo_parts else "core"
+    return [f"{repo_name}/core/architecture.py"]
+
+
 def _load_decisions_mock(
     decisions: list[Decision],
     db_path: Path | str | None = None,
@@ -161,6 +228,16 @@ def _load_decisions_mock(
     nodes = _mock_graph["nodes"]
     edges = _mock_graph["edges"]
     embeddings = _mock_graph["embeddings"]
+
+    seen_edges: set[tuple[str, str, str]] = {
+        (e["source"], e["target"], e["type"]) for e in edges
+    }
+
+    def add_edge(source: str, target: str, rel_type: str) -> None:
+        key = (source, target, rel_type)
+        if key not in seen_edges:
+            seen_edges.add(key)
+            edges.append({"source": source, "target": target, "type": rel_type})
 
     for dec in decisions:
         embedding = embed_decision(dec)
@@ -170,13 +247,43 @@ def _load_decisions_mock(
         nodes[dec.id] = {
             "id": dec.id,
             "type": "Decision",
+            "label": "Decision",
             "title": dec.title,
             "outcome": dec.outcome,
             "rationale": dec.rationale,
             "confidence": dec.confidence,
             "decided_at": dec.decided_at.isoformat() if dec.decided_at else None,
             "repo_or_forum": dec.repo_or_forum,
+            "thread_id": dec.thread_id,
         }
+
+        # Repository Node
+        if dec.repo_or_forum:
+            repo_id = f"repo_{dec.repo_or_forum}"
+            if repo_id not in nodes:
+                nodes[repo_id] = {
+                    "id": repo_id,
+                    "type": "Repo",
+                    "label": "Repo",
+                    "name": dec.repo_or_forum,
+                    "title": f"Repository: {dec.repo_or_forum}",
+                    "repo_or_forum": dec.repo_or_forum,
+                }
+            add_edge(dec.id, repo_id, "BELONGS_TO")
+
+        # Discussion / Thread Node
+        if dec.thread_id:
+            thread_id = f"thread_{dec.thread_id}"
+            if thread_id not in nodes:
+                nodes[thread_id] = {
+                    "id": thread_id,
+                    "type": "Discussion",
+                    "label": "Discussion",
+                    "title": dec.title,
+                    "thread_id": dec.thread_id,
+                    "repo_or_forum": dec.repo_or_forum,
+                }
+            add_edge(dec.id, thread_id, "DISCUSSED_IN")
 
         # Evidence nodes
         for ev in dec.evidence:
@@ -184,17 +291,26 @@ def _load_decisions_mock(
             nodes[source_id] = {
                 "id": source_id,
                 "type": "Source",
+                "label": "Source",
                 "url": ev.source_url,
                 "quote": ev.quote,
                 "platform": ev.platform,
                 "author": ev.author_handle,
                 "posted_at": ev.posted_at.isoformat(),
+                "repo_or_forum": dec.repo_or_forum,
             }
-            edges.append({"source": dec.id, "target": source_id, "type": "SUPPORTED_BY"})
+            add_edge(dec.id, source_id, "SUPPORTED_BY")
 
             person_id = f"person_{ev.author_handle.lower()}"
-            nodes[person_id] = {"id": person_id, "type": "Person", "handle": ev.author_handle}
-            edges.append({"source": person_id, "target": source_id, "type": "AUTHORED"})
+            nodes[person_id] = {
+                "id": person_id,
+                "type": "Person",
+                "label": "Person",
+                "handle": ev.author_handle,
+                "name": ev.author_handle,
+                "repo_or_forum": dec.repo_or_forum,
+            }
+            add_edge(person_id, source_id, "AUTHORED")
 
         # Alternative nodes
         for idx, alt in enumerate(dec.alternatives):
@@ -202,27 +318,44 @@ def _load_decisions_mock(
             nodes[alt_id] = {
                 "id": alt_id,
                 "type": "Alternative",
+                "label": "Alternative",
                 "text": alt.text,
                 "reason": alt.reason,
+                "title": f"Alternative: {alt.text[:30]}",
+                "repo_or_forum": dec.repo_or_forum,
             }
-            edges.append({"source": dec.id, "target": alt_id, "type": "HAS_ALTERNATIVE"})
+            add_edge(dec.id, alt_id, "HAS_ALTERNATIVE")
 
-            alt_source_id = alt.evidence.source_url
-            nodes[alt_source_id] = {
-                "id": alt_source_id,
-                "type": "Source",
-                "url": alt.evidence.source_url,
-                "quote": alt.evidence.quote,
-                "platform": alt.evidence.platform,
-                "author": alt.evidence.author_handle,
-            }
-            edges.append({"source": alt_id, "target": alt_source_id, "type": "SUPPORTED_BY"})
+            if alt.evidence:
+                alt_source_id = alt.evidence.source_url
+                nodes[alt_source_id] = {
+                    "id": alt_source_id,
+                    "type": "Source",
+                    "label": "Source",
+                    "url": alt.evidence.source_url,
+                    "quote": alt.evidence.quote,
+                    "platform": alt.evidence.platform,
+                    "author": alt.evidence.author_handle,
+                    "repo_or_forum": dec.repo_or_forum,
+                }
+                add_edge(alt_id, alt_source_id, "SUPPORTED_BY")
 
         # File nodes
-        for path in dec.linked_paths:
+        paths_to_link = dec.linked_paths or infer_decision_paths(dec)
+        for path in paths_to_link:
             file_id = f"file_{path}"
-            nodes[file_id] = {"id": file_id, "type": "File", "path": path}
-            edges.append({"source": dec.id, "target": file_id, "type": "AFFECTS"})
+            nodes[file_id] = {
+                "id": file_id,
+                "type": "File",
+                "label": "File",
+                "path": path,
+                "title": path.split("/")[-1],
+                "repo_or_forum": dec.repo_or_forum,
+            }
+            add_edge(dec.id, file_id, "AFFECTS")
+            if dec.repo_or_forum:
+                repo_id = f"repo_{dec.repo_or_forum}"
+                add_edge(file_id, repo_id, "IN_REPOSITORY")
 
 
 def get_decision(decision_id: str, driver: Any = None) -> dict[str, Any] | None:

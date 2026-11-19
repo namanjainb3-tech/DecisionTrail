@@ -31,7 +31,7 @@ def analyze_pr(
     pr_title: str = "",
     pr_diff_summary: str = "",
     post_to_github: bool = False,
-    threshold: float = 0.35,
+    threshold: float = 0.25,
     max_results: int = 3,
     driver: Any = None,
     db_path: Path | str | None = None,
@@ -40,10 +40,16 @@ def analyze_pr(
     if post_to_github:
         check_repo_allowlist(repo)
 
+    from graph.loader import get_mock_graph_state, rebuild_from_sqlite
+    state = get_mock_graph_state()
+    if not state["nodes"]:
+        rebuild_from_sqlite(db_path=db_path, driver=driver)
+
     candidates = search_candidates(
         changed_files=changed_files,
         pr_title=pr_title,
         pr_diff_summary=pr_diff_summary,
+        repo=repo,
         driver=driver,
         db_path=db_path,
     )
@@ -59,11 +65,21 @@ def analyze_pr(
 
     comment_markdown = render_bot_comment(top_decisions)
 
+    flattened_decisions = []
+    for item in top_decisions:
+        dec = dict(item.get("decision", {}))
+        dec["id"] = dec.get("id") or item.get("id")
+        score_val = round(float(item.get("score", 0.0)), 3)
+        dec["score"] = score_val
+        dec["relevance_score"] = score_val
+        dec["relevance_note"] = item.get("maintainer_note") or f"PR touches paths or concepts governed by this decision (Match Score: {int(score_val*100)}%)."
+        flattened_decisions.append(dec)
+
     return {
         "repo": repo,
         "changed_files": changed_files,
         "pr_title": pr_title,
-        "decisions": top_decisions,
+        "decisions": flattened_decisions,
         "comment_markdown": comment_markdown,
     }
 
