@@ -16,6 +16,11 @@ module.exports = {
         accent: '#0ea5e9',
         terminal: '#10b981',
       },
+      fontFamily: {
+        sans: ['Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+        mono: ['JetBrains Mono', 'Fira Code', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
       },
+    },
+  },
   plugins: [],
 };
