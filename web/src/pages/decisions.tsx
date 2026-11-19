@@ -668,6 +668,183 @@ export default function DecisionsPage() {
         </div>
       )}
 
+      {/* VIEW 2: DISCUSSION THREADS */}
+      {viewMode === 'discussions' && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* Left Column: Discussion Cards */}
+          <div className="lg:col-span-7 space-y-3">
+            {loading ? (
+              <div className="flex h-48 items-center justify-center rounded-xl border border-[#1a2336] bg-[#0a0e17]">
+                <div className="flex items-center space-x-2 text-xs text-slate-400">
+                  <div className="w-3.5 h-3.5 animate-spin rounded-full border-2 border-sky-500 border-r-transparent"></div>
+                  <span>Loading discussion threads...</span>
+                </div>
+              </div>
+            ) : filteredDiscussions.length === 0 ? (
+              isPrQuery ? (
+                <div className="p-8 text-center rounded-xl border border-dashed border-sky-500/40 bg-[#0f1728] space-y-3">
+                  <p className="text-sm font-semibold text-sky-200">
+                    Found a GitHub PR link in your search query
+                  </p>
+                  <p className="text-xs text-slate-400 font-mono max-w-md mx-auto truncate">
+                    {searchQuery.trim()}
+                  </p>
+                  <button
+                    onClick={() => executeIngest(searchQuery.trim())}
+                    disabled={loadingRepo}
+                    className="inline-flex items-center space-x-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white px-5 py-2.5 text-xs font-semibold shadow-sm"
+                  >
+                    {loadingRepo ? <span>Ingesting PR...</span> : <span>Ingest & View PR Discussion</span>}
+                  </button>
+                </div>
+              ) : (
+                <div className="p-12 text-center rounded-xl border border-dashed border-[#1a2336] bg-[#0a0e17]">
+                  <p className="text-xs sm:text-sm text-slate-400">
+                    {searchQuery
+                      ? `No discussion threads match "${searchQuery}".`
+                      : sectionMode === 'main' && currentRepo
+                      ? `No discussion threads ingested for "${currentRepo}" yet.`
+                      : 'No discussion threads found.'}
+                  </p>
+                  {searchQuery && (
+                    <button
+                      onClick={() => {
+                        setSearchQuery('');
+                        loadData('');
+                      }}
+                      className="mt-3 text-xs text-sky-400 underline hover:text-sky-300"
+                    >
+                      Clear Search
+                    </button>
+                  )}
+                </div>
+              )
+            ) : (
+              filteredDiscussions.map((disc) => {
+                const isSelected = activeDiscussion?.thread_id === disc.thread_id;
+                return (
+                  <div
+                    key={disc.thread_id}
+                    onClick={() => selectDiscussion(disc.thread_id)}
+                    className={`cursor-pointer rounded-xl border p-4 transition-all duration-150 ${
+                      isSelected
+                        ? 'border-sky-500 bg-[#0e1422] shadow-sm'
+                        : 'border-[#1a2336] bg-[#0a0e17] hover:border-[#27344f] hover:bg-[#0c111c]'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                      <div className="flex items-center space-x-2">
+                        <span className="rounded bg-[#101726] text-sky-300 border border-[#1f2b40] px-2 py-0.5 text-[10px] font-mono uppercase font-semibold">
+                          {disc.platform.replace('github_', '').replace('_', ' ')}
+                        </span>
+                        <span className="text-[11px] text-slate-500 font-mono">
+                          {new Date(disc.created_at).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <span className="rounded bg-[#101726] border border-[#1e2a3f] px-2 py-0.5 text-[10px] font-mono text-slate-300">
+                        {disc.comment_count} comments
+                      </span>
+                    </div>
+
+                    <h3 className="text-xs sm:text-sm font-semibold text-white leading-snug">
+                      {disc.title}
+                    </h3>
+
+                    <div className="mt-2.5 flex items-center justify-between text-[11px] pt-2 border-t border-[#161f30]">
+                      <span className="text-slate-500 font-mono truncate max-w-[280px]">
+                        {disc.thread_id}
+                      </span>
+                      <a
+                        href={disc.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="text-sky-400 hover:text-sky-300 flex items-center space-x-1 font-mono text-[11px]"
+                      >
+                        <span>GitHub</span>
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                        </svg>
+                      </a>
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
+
+          {/* Right Column: Full Discussion Detail & Comments */}
+          <div className="lg:col-span-5">
+            <div className="sticky top-20 rounded-xl border border-[#1a2336] bg-[#0a0e17] p-5 space-y-4 max-h-[85vh] overflow-y-auto">
+              {loadingDiscussionDetail ? (
+                <div className="flex h-32 items-center justify-center text-xs text-slate-400">
+                  <div className="w-3.5 h-3.5 animate-spin rounded-full border-2 border-sky-500 border-r-transparent mr-2"></div>
+                  <span>Loading thread comments...</span>
+                </div>
+              ) : activeDiscussion ? (
+                <>
+                  <div className="border-b border-[#161f30] pb-3">
+                    <div className="flex items-center space-x-2 text-[11px] text-slate-400 mb-1 font-mono">
+                      <span className="uppercase text-sky-400 font-semibold">{activeDiscussion.platform}</span>
+                      <span>•</span>
+                      <span>{new Date(activeDiscussion.created_at).toLocaleString()}</span>
+                    </div>
+                    <h2 className="text-sm sm:text-base font-bold text-white leading-snug">
+                      {activeDiscussion.title}
+                    </h2>
+                    <a
+                      href={activeDiscussion.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-2 inline-flex items-center space-x-1 text-xs text-sky-400 hover:text-sky-300 font-mono"
+                    >
+                      <span>Open Thread on GitHub</span>
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      </svg>
+                    </a>
+                  </div>
+
+                  <div className="space-y-3">
+                    <h4 className="text-[11px] font-mono uppercase tracking-wider text-slate-400 font-semibold">
+                      Discussion Comments ({activeDiscussion.comments.length})
+                    </h4>
+
+                    {activeDiscussion.comments.length === 0 ? (
+                      <div className="p-4 text-center text-xs text-slate-500">
+                        No discussion comments found in this thread.
+                      </div>
+                    ) : (
+                      activeDiscussion.comments.map((comment) => (
+                        <div
+                          key={comment.comment_id}
+                          className="rounded-lg border border-[#161f30] bg-[#070a12] p-3 space-y-1.5"
+                        >
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="font-semibold text-sky-300 font-mono text-[11px]">
+                              @{comment.author_handle}
+                            </span>
+                            <span className="text-slate-500 text-[10px] font-mono">
+                              {new Date(comment.posted_at).toLocaleDateString()}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-300 whitespace-pre-wrap leading-relaxed font-sans">
+                            {comment.body}
+                          </p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div className="p-8 text-center text-xs text-slate-500">
+                  Select a discussion thread on the left to read its full comment chain and review discussions.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
