@@ -357,5 +357,10 @@ def ingest_single_github_issue(
     )
 
     upsert_document(doc, db_path=db_path)
+    try:
+        from core.db_sqlite import upsert_cursor
+        upsert_cursor("github", repo, created_at.isoformat(), db_path=db_path)
+    except Exception:
+        pass
     return doc
 
