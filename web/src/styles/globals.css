@@ -34,3 +34,13 @@ body {
 }
 
 /* Custom interactive selections */
+::selection {
+  background: rgba(14, 165, 233, 0.25);
+  color: #38bdf8;
+}
+
+/* Crisp focus outline */
+*:focus-visible {
+  outline: 1px solid #38bdf8;
+  outline-offset: 1px;
+}
