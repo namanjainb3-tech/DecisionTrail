@@ -548,6 +548,126 @@ export default function DecisionsPage() {
         )}
       </form>
 
+      {/* VIEW 1: ARCHITECTURAL DECISIONS CATALOG */}
+      {viewMode === 'decisions' && (
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* Left Column: Decision Cards */}
+            <div className="lg:col-span-7 space-y-3.5">
+              {loading ? (
+                <div className="flex h-48 items-center justify-center rounded-xl border border-[#1a2336] bg-[#0a0e17]">
+                  <div className="flex items-center space-x-2 text-xs text-slate-400">
+                    <div className="w-3.5 h-3.5 animate-spin rounded-full border-2 border-sky-500 border-r-transparent"></div>
+                    <span>Loading verified decisions...</span>
+                  </div>
+                </div>
+              ) : currentDecisions.length === 0 ? (
+                <div className="flex flex-col items-center justify-center p-12 text-center rounded-xl border border-dashed border-[#1a2336] bg-[#0a0e17]/60 space-y-2">
+                  <svg className="w-8 h-8 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <p className="text-xs sm:text-sm font-medium text-slate-300">
+                    {sectionMode === 'main' && currentRepo
+                      ? `No decisions extracted for "${currentRepo}" yet.`
+                      : 'No decisions match your search criteria.'}
+                  </p>
+                  <p className="text-[11px] text-slate-500 max-w-sm">
+                    Enter any public repository URL in the top bar to ingest issues and extract architectural consensus.
+                  </p>
+                </div>
+              ) : (
+                currentDecisions.map((dec) => (
+                  <DecisionCard
+                    key={dec.id}
+                    decision={dec}
+                    onSelect={setActiveDecision}
+                    selected={activeDecision?.id === dec.id}
+                  />
+                ))
+              )}
+            </div>
+
+            {/* Right Column: Active Decision Detail Drawer */}
+            <div className="lg:col-span-5">
+              <div className="sticky top-20 rounded-xl border border-[#1a2336] bg-[#0a0e17] p-5 space-y-4 shadow-sm">
+                {activeDecision ? (
+                  <>
+                    <div className="border-b border-[#161f30] pb-3.5">
+                      <div className="flex items-center space-x-2 mb-2">
+                        <OutcomeBadge outcome={activeDecision.outcome} />
+                        <PlatformBadge platform={activeDecision.repo_or_forum} />
+                        <ConfidenceBadge confidence={activeDecision.confidence} />
+                      </div>
+                      <h2 className="text-base font-bold text-white leading-snug">
+                        {activeDecision.title}
+                      </h2>
+                      <div className="mt-2 text-[11px] font-mono text-slate-400 flex items-center justify-between">
+                        <span className="truncate max-w-[200px]">Thread: {activeDecision.thread_id}</span>
+                        <button
+                          onClick={() => {
+                            setViewMode('discussions');
+                            selectDiscussion(activeDecision.thread_id);
+                          }}
+                          className="text-sky-400 hover:text-sky-300 font-sans text-xs underline shrink-0"
+                        >
+                          View Full Thread
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <h4 className="text-[11px] font-mono uppercase tracking-wider text-slate-400 mb-1.5 font-semibold">
+                        Architectural Rationale
+                      </h4>
+                      <p className="text-xs text-slate-200 leading-relaxed bg-[#07090f] p-3 rounded-lg border border-[#161f30]">
+                        {activeDecision.rationale}
+                      </p>
+                    </div>
+
+                    <div>
+                      <h4 className="text-[11px] font-mono uppercase tracking-wider text-slate-400 mb-2 font-semibold">
+                        Verified Evidence Quotes ({activeDecision.evidence.length})
+                      </h4>
+                      <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                        {activeDecision.evidence.map((ev, idx) => (
+                          <QuoteViewer key={idx} evidence={ev} label={`Citation #${idx + 1}`} />
+                        ))}
+                      </div>
+                    </div>
+
+                    {activeDecision.alternatives && activeDecision.alternatives.length > 0 && (
+                      <div>
+                        <h4 className="text-[11px] font-mono uppercase tracking-wider text-rose-400 mb-2 font-semibold">
+                          Rejected Alternatives ({activeDecision.alternatives.length})
+                        </h4>
+                        <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                          {activeDecision.alternatives.map((alt, idx) => (
+                            <div key={idx} className="rounded-lg border border-rose-950/60 bg-rose-950/20 p-2.5 text-xs space-y-1">
+                              <div className="font-semibold text-rose-300">Proposal: {alt.text}</div>
+                              <div className="text-slate-300 text-[11px]"><span className="text-slate-400 font-medium">Reason: </span>{alt.reason}</div>
+                              {alt.evidence && <QuoteViewer evidence={alt.evidence} label="Proposal Quote" />}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="pt-2 border-t border-[#161f30] text-[10px] font-mono text-slate-500 flex justify-between items-center">
+                      <span>Model: <span className="text-slate-400">{activeDecision.extractor_model}</span></span>
+                      <span>Decided: {activeDecision.decided_at ? new Date(activeDecision.decided_at).toLocaleDateString() : 'Recorded'}</span>
+                    </div>
+                  </>
+                ) : (
+                  <div className="p-8 text-center text-xs text-slate-500">
+                    Select a decision on the left to inspect its verified quotes and evidence.
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
           </div>
   );
 }
