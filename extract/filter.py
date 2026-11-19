@@ -26,6 +26,21 @@ DECISION_CUES = [
     r"\bchose not to\b",
     r"\bdecided on\b",
     r"\bagreed to\b",
+    r"\bagreed that\b",
+    r"\bconcluded that\b",
+    r"\bconsensus was\b",
+    r"\bsettled on\b",
+    r"\bwill not support\b",
+    r"\bstick with\b",
+    r"\bfixed\b",
+    r"\badded\b",
+    r"\brefactored\b",
+    r"\bstandardized\b",
+    r"\bdeprecated\b",
+    r"\bimplemented\b",
+    r"\barchitectur(e|al)\b",
+    r"\bdesign decision\b",
+    r"\bresolv(e|ed)\b",
 ]
 
 COMPILED_CUES = [re.compile(pattern, re.IGNORECASE) for pattern in DECISION_CUES]
