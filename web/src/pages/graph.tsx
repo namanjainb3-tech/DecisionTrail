@@ -534,6 +534,4 @@ export default function GraphPage() {
       </div>
     </div>
   );
-}    </div>
-  );
 }
