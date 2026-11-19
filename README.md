@@ -140,3 +140,44 @@ Open `http://localhost:3000` to interact with DecisionTrail.
 
 ---
 
+## 6. Live Hackathon Demo Walkthrough
+
+Judges can explore four core interactive modules:
+
+1. **Engineering Decisions & Discussions (`/decisions`)**:
+   * Browse verified architectural decisions with categorized outcomes (`adopted`, `rejected`, `reverted`).
+   * Inspect verbatim maintainer quotes, rapidfuzz match confidence, and rejected proposals.
+   * Paste any public GitHub repo URL (e.g. `django/django`, `psf/black`, `huggingface/diffusers`) or a single PR link into the top input bar to ingest on the fly.
+   * Switch between **Main Active Data** and the **Previous Data Archive** to compare or delete repositories.
+2. **Interactive Knowledge Graph (`/graph`)**:
+   * Inspect nodes (`Decision`, `Thread`, `File`, `Person`, `Repository`) and relationships (`CONCERNS`, `DISCUSSED_IN`, `LINKED_TO`, `RENAMED_TO`).
+   * Select any repository from the top dropdown or search specific file paths to trace decision history.
+3. **PR Simulation Bot (`/pr`)**:
+   * Paste a PR URL or choose a preset test case (e.g., *Re-introducing `__pypackages__`*, *Bypassing C-Extensions in Black*).
+   * Run the analysis engine to view the simulated CI bot review flagging resurrected rejected ideas.
+4. **Evaluation Benchmark (`/eval`)**:
+   * Review the blind benchmark results demonstrating **63.6% recall** against PSF PEP debates with zero PEP text in the database.
+   * Click **Run Live Benchmark** to execute the evaluation pipeline across all test PEPs.
+
+---
+
+## 7. Answers to the 4 Judging Questions
+
+For exhaustive architectural rationale and benchmark analysis, see [docs/tradeoffs.md](docs/tradeoffs.md):
+
+1. **Same Person Across Platforms**:
+   * Resolves identities across GitHub and Discourse using a deterministic pipeline: handle normalization, SHA-256 email digests, and exact display-name matching. Conservative by design to eliminate false mergers.
+2. **Incremental Updates**:
+   * Tracks per-source `updated_at` cursors and performs idempotent `ON CONFLICT` database upserts. Gated by regex decision cues to avoid unnecessary LLM invocations on mundane threads.
+3. **Links Surviving File Renames**:
+   * Traverses transitive ancestor chains over `(:File)-[:RENAMED_TO*]->(:File)` edges reconstructed from PR patch headers. Revert PRs automatically update decision outcomes.
+4. **Showing Sources**:
+   * Enforces 100% source fidelity. Every proposal is accompanied by a verbatim quote validated at $\ge 95\%$ RapidFuzz similarity against the raw text, with one-click direct links to the original comment.
+
+---
+
+## 8. Safety & Compliance Ground Rules
+
+* **Zero Web Scraping**: All data is ingested strictly via official public REST APIs (GitHub REST API v3 and Discourse JSON endpoints). No headless scraping or proxy networks are used.
+* **Strict PR Bot Posting Guard**: `bot/analyze.py` enforces a hardcoded `ALLOWED_POST_REPOS` security guardrail to prevent unintended comments on production repositories.
+* **Synthetic Test Disclosure**: Small-scale test suites (`tests/test_code_linker.py`, `tests/test_extract.py`) use hand-crafted fixtures to guarantee deterministic, rapid, air-gapped verification without live network calls.
