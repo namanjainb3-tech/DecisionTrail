@@ -524,10 +524,100 @@ def search_vector(query: str, top_k: int = 5, driver: Any = None) -> list[dict[s
 
 
 def rebuild_from_sqlite(db_path: Path | str | None = None, driver: Any = None) -> int:
-    """Wipes graph and re-hydrates completely from SQLite decisions table."""
-    raw_decisions = get_decisions(limit=1000, db_path=db_path)
+    """Wipes graph and re-hydrates completely from SQLite decisions and documents tables."""
+    raw_decisions = get_decisions(limit=2000, db_path=db_path)
     dec_objects = [Decision.model_validate(d) for d in raw_decisions]
 
     reset_mock_graph()
     load_decisions(dec_objects, driver=driver, db_path=db_path)
+
+    # Hydrate all repositories and discussions so graph is immediately comprehensive
+    conn = get_db(db_path)
+    try:
+        from core.db_sqlite import get_repositories
+        all_repos = get_repositories(db_path=db_path)
+        nodes = _mock_graph["nodes"]
+        edges = _mock_graph["edges"]
+        seen_edges: set[tuple[str, str, str]] = {
+            (e["source"], e["target"], e["type"]) for e in edges
+        }
+
+        def add_edge_safe(src: str, tgt: str, rel: str) -> None:
+            key = (src, tgt, rel)
+            if key not in seen_edges:
+                seen_edges.add(key)
+                edges.append({"source": src, "target": tgt, "type": rel})
+
+        # Ensure all repos have Repo nodes
+        for repo_name in all_repos:
+            repo_id = f"repo_{repo_name}"
+            if repo_id not in nodes:
+                nodes[repo_id] = {
+                    "id": repo_id,
+                    "type": "Repo",
+                    "label": "Repo",
+                    "name": repo_name,
+                    "title": f"Repository: {repo_name}",
+                    "repo_or_forum": repo_name,
+                }
+
+        # Hydrate documents from documents table
+        cursor = conn.execute("SELECT thread_id, platform, url, title, raw_json FROM documents;")
+        for row in cursor.fetchall():
+            tid = row["thread_id"]
+            title = row["title"]
+            url = row["url"]
+            thread_node_id = f"thread_{tid}"
+
+            # Derive repo for this document
+            repo_for_doc = ""
+            if tid.startswith("github_"):
+                raw = tid.removeprefix("github_")
+                if "_" in raw:
+                    repo_for_doc = raw.rsplit("_", 1)[0]
+            elif "discourse" in tid or "pep" in tid:
+                repo_for_doc = "discourse"
+
+            if thread_node_id not in nodes:
+                nodes[thread_node_id] = {
+                    "id": thread_node_id,
+                    "type": "Discussion",
+                    "label": "Discussion",
+                    "title": title or tid,
+                    "url": url,
+                    "thread_id": tid,
+                    "repo_or_forum": repo_for_doc,
+                }
+
+            if repo_for_doc:
+                repo_id = f"repo_{repo_for_doc}"
+                if repo_id in nodes:
+                    add_edge_safe(thread_node_id, repo_id, "IN_REPOSITORY")
+
+            # Extract authors from raw_json comments if present
+            if row["raw_json"]:
+                try:
+                    doc_data = json.loads(row["raw_json"])
+                    for c in doc_data.get("comments", [])[:3]:
+                        author = c.get("author_handle")
+                        if author and not author.startswith("bot-"):
+                            person_id = f"person_{author.lower()}"
+                            if person_id not in nodes:
+                                nodes[person_id] = {
+                                    "id": person_id,
+                                    "type": "Person",
+                                    "label": "Person",
+                                    "handle": author,
+                                    "name": author,
+                                    "repo_or_forum": repo_for_doc,
+                                }
+                            add_edge_safe(person_id, thread_node_id, "PARTICIPATED_IN")
+                except Exception:
+                    pass
+
+    except Exception as e:
+        logger.warning(f"Error hydrating extra graph nodes from documents: {e}")
+    finally:
+        conn.close()
+
     return len(dec_objects)
