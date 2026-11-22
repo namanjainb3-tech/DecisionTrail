@@ -42,7 +42,7 @@ What happens?
 * The original debate is buried under thousands of closed GitHub comments.
 * Senior maintainers spend weeks re-litigating settled debates—or worse, the PR merges and resurrects a known production deadlock.
 
-$$\text{Git remembers \textbf{WHAT} was changed, but completely forgets \textbf{WHY}.}$$
+> **Git remembers WHAT was changed, but completely forgets WHY.**
 
 ### The Solution: Automated Recovery & Active CI Guardrails
 **DecisionTrail** continuously mines public developer discourse to reconstruct an immutable, queryable decision ledger:
@@ -105,21 +105,32 @@ flowchart TD
 
 ## 🛡️ The 4 Core Engineering Invariants
 
-### 1. The Verbatim Quote Invariant ($\ge 95\%$ RapidFuzz)
+### 1. The Verbatim Quote Invariant (≥ 95% RapidFuzz)
 In software architecture, trusting an LLM's summary is dangerous. DecisionTrail treats model outputs as untrusted proposals subject to cryptographic-style text verification:
-$$\text{Score} = \text{RapidFuzz.partial\_ratio}(\text{normalize}(\text{Quote}), \text{normalize}(\text{RawCommentBody})) \ge 95\%$$
+
+```python
+Score = RapidFuzz.partial_ratio(normalize(Quote), normalize(RawCommentBody)) >= 95%
+```
+
 * If an LLM alters or fabricates even a single word, that quote is stripped.
 * If a decision has zero verified quotes remaining, the entire record is purged.
 * Every decision card pairs with an author handle, timestamp, and direct one-click link to the human conversation.
 
 ### 2. Rename-Resilient Lineage (`(:File)-[:RENAMED_TO*]->(:File)`)
 Codebases undergo continuous refactoring. If a decision affected `old_parser.py` in 2022, and the file was renamed twice, static path lookups fail. DecisionTrail extracts Git patch headers and constructs directed rename edges:
-$$\text{Ancestors}(P) = \{ p_0 \mid p_0 \xrightarrow{\text{RENAMED\_TO}^*} P \}$$
+
+```text
+Ancestors(P) = { p₀ | p₀ —[:RENAMED_TO*]→ P }
+```
+
 When querying decisions for `src/core/parser.py`, multi-hop BFS traversal resolves past consensus across years of renaming.
 
 ### 3. State Machine Decision Outcomes & Revert Detection
 Decisions are modeled as a dynamic finite-state machine:
-$$\text{State} \in \{\text{adopted}, \text{rejected}, \text{deferred}, \text{reverted}\}$$
+
+```text
+State ∈ { adopted, rejected, deferred, reverted }
+```
 When a revert PR merges (e.g., `'Revert "Enable async I/O"'`), DecisionTrail matches the target PR and automatically flips the original decision to `reverted`, preventing discarded ideas from being cited as active guidance.
 
 ### 4. Active Maintainer Calibration Loop (RLHF via SQLite + mem0)
